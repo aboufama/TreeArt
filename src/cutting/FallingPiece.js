@@ -22,6 +22,7 @@ export class FallingPiece {
     this.settled = false;
     this.groundTime = 0;
     this.alpha = 1;
+    this.leafAlpha = 1;
     this.pivoting = false;
     this.impactDone = false;
     this.groundShake = false;
@@ -182,7 +183,7 @@ export class FallingPiece {
         size: leaf.size,
         angle: leaf.angle + this.rotation,
         color: leaf.color,
-        life: this.alpha
+        life: this.leafAlpha
       });
     }
 
@@ -222,10 +223,15 @@ export class FallingPiece {
   }
 
   update(groundY, onShake, onSpawnPiece) {
-    // Settled pieces only fade out
+    // Settled pieces: fade leaves first, then branch
     if (this.settled) {
       this.groundTime++;
-      if (this.groundTime > 120) {
+      // Leaves start fading immediately after settling
+      if (this.groundTime > 30) {
+        this.leafAlpha = Math.max(0, this.leafAlpha - 0.02);
+      }
+      // Branch starts fading only after leaves are gone
+      if (this.leafAlpha <= 0 && this.groundTime > 90) {
         this.alpha = Math.max(0, this.alpha - 0.01);
       }
       this.updateMesh();

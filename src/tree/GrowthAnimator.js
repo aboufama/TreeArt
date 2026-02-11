@@ -1,5 +1,5 @@
-const DEPTH_DELAY = 280;       // ms between depth levels starting to grow
-const SEG_GROW_DURATION = 350; // ms for one segment to fully extend
+const DEPTH_DELAY = 420;       // ms between depth levels starting to grow
+const SEG_GROW_DURATION = 500; // ms for one segment to fully extend
 const MAX_DEPTH = 9;
 const LEAF_DURATION = 2500;    // ms for leaf pop-in to complete
 

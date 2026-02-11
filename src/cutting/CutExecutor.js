@@ -95,11 +95,11 @@ export class CutExecutor {
                        allFallingIndices.has(leaf.segIndex);
       if (!affected) continue;
 
-      if (Math.random() < 0.4) {
-        // 40% detach and flutter away
+      if (Math.random() < 0.04) {
+        // ~4% detach and flutter away on cut
         if (onDetachLeaf) onDetachLeaf(leaf, slashDir);
       } else {
-        // 60% ride the falling piece
+        // ~96% ride the falling piece
         ridingLeaves.push({
           lx: leaf.x - hitX,
           ly: leaf.y - hitY,
