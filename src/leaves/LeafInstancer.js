@@ -69,18 +69,7 @@ export class LeafInstancer {
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 
-  updateInstances(cutBranches = new Set(), leafGrowStart = 0) {
-    // No leaves until leaf growth phase starts
-    if (leafGrowStart === 0) {
-      this.mesh.count = 0;
-      this.mesh.instanceMatrix.needsUpdate = true;
-      return;
-    }
-
-    const now = performance.now();
-    const elapsed = (now - leafGrowStart) / 1000;
-    const growDuration = 1.5;
-
+  updateInstances(cutBranches = new Set(), getLeafScale = null) {
     let visibleCount = 0;
 
     for (let i = 0; i < this.leaves.length && i < MAX_LEAVES; i++) {
@@ -90,14 +79,10 @@ export class LeafInstancer {
         continue;
       }
 
-      // Calculate growth progress for staggered pop-in
-      const stagger = (leaf.depth - 3) * 0.1;
-      const leafProgress = Math.max(0, Math.min(1, (elapsed - stagger) / growDuration));
+      // Get scale from growth animator (0 = hidden, 0-1 = popping in, 1 = full)
+      const scale = getLeafScale ? getLeafScale(leaf.segIndex) : 1;
 
-      if (leafProgress <= 0) continue;
-
-      // Ease-out for smooth pop-in
-      const scale = 1 - (1 - leafProgress) * (1 - leafProgress);
+      if (scale <= 0) continue;
 
       // Set position including wind offset
       const drawX = leaf.x + leaf.ox;

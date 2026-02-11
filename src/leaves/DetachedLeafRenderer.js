@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { LeafMaterial } from './LeafMaterial.js';
 import { hexToColor } from '../utils/ColorUtils.js';
 
-const MAX_DETACHED = 500;
+const MAX_DETACHED = 2000;
 
 export class DetachedLeafRenderer {
   constructor(leafGeometry) {

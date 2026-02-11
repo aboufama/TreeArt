@@ -3,6 +3,7 @@ varying float vDepthRatio;
 varying vec3 vColor;
 
 uniform float time;
+uniform float uAlpha;
 
 // Simple noise for bark texture
 float hash(vec2 p) {
@@ -40,5 +41,5 @@ void main() {
   color.r *= 1.02;
   color.b *= 0.98;
 
-  gl_FragColor = vec4(color, 1.0);
+  gl_FragColor = vec4(color, uAlpha);
 }

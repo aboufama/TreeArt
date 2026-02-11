@@ -28,7 +28,7 @@ export class BranchGeometry {
       // Get growth fraction for this segment (0 = hidden, 0-1 = partial, 1 = full)
       let growth = 1;
       if (getSegmentGrowth) {
-        growth = getSegmentGrowth(seg.depth);
+        growth = getSegmentGrowth(seg.index);
         if (growth <= 0) continue;
       }
 

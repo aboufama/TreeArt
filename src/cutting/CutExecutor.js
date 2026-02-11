@@ -214,18 +214,9 @@ export class CutExecutor {
 
     for (let i = this.fallingPieces.length - 1; i >= 0; i--) {
       const piece = this.fallingPieces[i];
-      const wasAirborne = !piece.settled && !piece.pivoting;
       const alive = piece.update(groundY, onShake, (data) => {
         spawnQueue.push(data);
-      });
-
-      // Shed leaves on first ground contact
-      if (wasAirborne && (piece.pivoting || piece.settled) && !piece.leavesShed) {
-        const shed = piece.shedLeavesOnImpact();
-        if (shed.length > 0 && onShedLeaves) {
-          onShedLeaves(shed);
-        }
-      }
+      }, onShedLeaves);
 
       if (!alive) {
         piece.mesh.parent?.remove(piece.mesh);

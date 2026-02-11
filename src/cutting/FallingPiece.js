@@ -34,7 +34,9 @@ export class FallingPiece {
 
   createMesh(branchMaterial) {
     const geometry = this.buildGeometry();
-    const mesh = new THREE.Mesh(geometry, branchMaterial);
+    // Clone material so each piece can fade independently
+    this.ownMaterial = branchMaterial.clone();
+    const mesh = new THREE.Mesh(geometry, this.ownMaterial);
     return mesh;
   }
 
@@ -99,11 +101,7 @@ export class FallingPiece {
   updateMesh() {
     this.mesh.position.set(this.x, this.y, 0.1);
     this.mesh.rotation.z = this.rotation;
-
-    if (this.alpha < 1) {
-      this.mesh.material.transparent = true;
-      this.mesh.material.opacity = this.alpha;
-    }
+    this.ownMaterial.uniforms.uAlpha.value = this.alpha;
   }
 
   getCorners() {
@@ -221,17 +219,14 @@ export class FallingPiece {
     return shed;
   }
 
-  update(groundY, onShake, onSpawnPiece) {
-    // Settled pieces: fade leaves first, then branch
+  update(groundY, onShake, onSpawnPiece, onShedLeaves) {
+    // Settled pieces: fade leaves and branch together
     if (this.settled) {
       this.groundTime++;
-      // Leaves start fading immediately after settling
       if (this.groundTime > 30) {
-        this.leafAlpha = Math.max(0, this.leafAlpha - 0.005);
-      }
-      // Branch starts fading only after leaves are gone
-      if (this.leafAlpha <= 0 && this.groundTime > 90) {
-        this.alpha = Math.max(0, this.alpha - 0.01);
+        const fadeRate = 0.004;
+        this.leafAlpha = Math.max(0, this.leafAlpha - fadeRate);
+        this.alpha = Math.max(0, this.alpha - fadeRate);
       }
       this.updateMesh();
       return this.alpha > 0;
@@ -275,6 +270,12 @@ export class FallingPiece {
 
     // Ground contact
     this.y += (groundY - minWY);
+
+    // Shed leaves on first ground contact
+    if (!this.leavesShed && onShedLeaves) {
+      const shed = this.shedLeavesOnImpact();
+      if (shed.length > 0) onShedLeaves(shed);
+    }
 
     // Shed branches on first ground contact
     if (!this.impactDone && this.segments.length > 1 && onSpawnPiece) {
@@ -416,5 +417,6 @@ export class FallingPiece {
 
   dispose() {
     this.mesh.geometry.dispose();
+    this.ownMaterial.dispose();
   }
 }

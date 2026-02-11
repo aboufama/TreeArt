@@ -8,10 +8,11 @@ export class BranchMaterial extends THREE.ShaderMaterial {
       vertexShader: branchVertShader,
       fragmentShader: branchFragShader,
       uniforms: {
-        time: { value: 0 }
+        time: { value: 0 },
+        uAlpha: { value: 1.0 }
       },
       side: THREE.DoubleSide,
-      transparent: false
+      transparent: true
     });
   }
 

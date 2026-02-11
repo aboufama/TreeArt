@@ -61,6 +61,15 @@ class TreeApp {
     this.sceneManager.layers.cursor.add(this.mouseTrail.cursorDot);
     this.sceneManager.layers.cursor.add(this.mouseTrail.trailLine);
 
+    // Hint element
+    this.cutHint = document.getElementById('cut-hint');
+    this.hintVisible = false;
+    this.hasCut = false;
+
+    // Note element
+    this.noteEl = document.getElementById('note');
+    this.noteShown = false;
+
     // Initialize
     this.setupEvents();
     this.hideLoading();
@@ -78,6 +87,7 @@ class TreeApp {
   setupEvents() {
     const canvas = this.sceneManager.canvas;
 
+    // -- Mouse events --
     canvas.addEventListener('mousedown', (e) => {
       const pos = this.getMousePos(e);
       if (this.growthAnimator.isAnimating()) return;
@@ -118,6 +128,55 @@ class TreeApp {
       this.newTree();
     });
 
+    // -- Touch events (mobile) --
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      const pos = this.getTouchPos(e);
+      if (this.growthAnimator.isAnimating()) return;
+
+      this.mouseTrail.startSlash(pos.x, pos.y);
+      this.mouseTrail.updateMouse(pos.x, pos.y);
+      this.leafPhysics.updateMouse(pos.x, pos.y);
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const pos = this.getTouchPos(e);
+      this.mouseTrail.updateMouse(pos.x, pos.y);
+      this.leafPhysics.updateMouse(pos.x, pos.y);
+
+      if (this.mouseTrail.isSlashing && !this.growthAnimator.isAnimating()) {
+        const prevX = this.mouseTrail.trail.length > 0
+          ? this.mouseTrail.trail[this.mouseTrail.trail.length - 1].x
+          : pos.x;
+        const prevY = this.mouseTrail.trail.length > 0
+          ? this.mouseTrail.trail[this.mouseTrail.trail.length - 1].y
+          : pos.y;
+
+        this.mouseTrail.updateSlash(pos.x, pos.y);
+        this.checkCut(prevX, prevY, pos.x, pos.y);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      this.mouseTrail.endSlash();
+    }, { passive: false });
+
+    canvas.addEventListener('touchcancel', () => {
+      this.mouseTrail.endSlash();
+    });
+
+    // Double-tap to regenerate tree
+    this.lastTap = 0;
+    canvas.addEventListener('touchstart', (e) => {
+      const now = Date.now();
+      if (now - this.lastTap < 350) {
+        this.newTree();
+      }
+      this.lastTap = now;
+    });
+
     window.addEventListener('resize', () => {
       this.postProcessing.resize(
         window.innerWidth,
@@ -134,7 +193,23 @@ class TreeApp {
     return this.sceneManager.screenToWorld(screenX, screenY);
   }
 
+  getTouchPos(e) {
+    const touch = e.touches[0] || e.changedTouches[0];
+    const rect = this.sceneManager.canvas.getBoundingClientRect();
+    const screenX = touch.clientX - rect.left;
+    const screenY = touch.clientY - rect.top;
+    return this.sceneManager.screenToWorld(screenX, screenY);
+  }
+
   newTree() {
+    // Hide hint and note, reset state
+    this.cutHint.classList.remove('visible');
+    this.hintVisible = false;
+    this.hasCut = false;
+    this.noteEl.classList.remove('active');
+    this.noteEl.style.transition = 'none';
+    this.noteShown = false;
+
     // Clear previous tree
     if (this.branchMesh) {
       this.sceneManager.layers.branches.remove(this.branchMesh);
@@ -178,7 +253,8 @@ class TreeApp {
     this.leaves = this.leafGenerator.generate(this.segments);
     this.leafInstancer.setLeaves(this.leaves);
 
-    // Start growth animation
+    // Assign per-segment growth timing and start animation
+    this.growthAnimator.assignTimes(this.segments);
     this.growthAnimator.start();
   }
 
@@ -190,6 +266,13 @@ class TreeApp {
     );
 
     if (hit) {
+      // Hide hint on first cut
+      if (this.hintVisible) {
+        this.cutHint.classList.remove('visible');
+        this.hintVisible = false;
+        this.hasCut = true;
+      }
+
       const slashDir = x2 > x1 ? 1 : -1;
       this.cutExecutor.cutBranch(
         this.segments,
@@ -205,6 +288,11 @@ class TreeApp {
 
       // Spawn sawdust
       this.sawdustSystem.spawn(hit.hitX, hit.hitY);
+
+      // Show note when trunk is cut
+      if (!this.noteShown && hit.seg.depth <= 1) {
+        this.showNote(hit.hitX, hit.hitY);
+      }
 
       // Rebuild branch geometry
       this.rebuildBranchGeometry();
@@ -228,6 +316,28 @@ class TreeApp {
     }
   }
 
+  showNote(worldX, worldY) {
+    this.noteShown = true;
+    const screen = this.sceneManager.worldToScreen(worldX, worldY);
+
+    // Position at cut point, then float up
+    const targetY = Math.max(60, screen.y - 300);
+
+    // Set starting position (tiny, at cut point)
+    this.noteEl.style.transition = 'none';
+    this.noteEl.style.left = screen.x + 'px';
+    this.noteEl.style.top = screen.y + 'px';
+    this.noteEl.classList.remove('active');
+    void this.noteEl.offsetWidth; // force reflow
+
+    // 1 second delay, then rise and unfold
+    setTimeout(() => {
+      this.noteEl.style.transition = '';
+      this.noteEl.style.top = targetY + 'px';
+      this.noteEl.classList.add('active');
+    }, 1000);
+  }
+
   rebuildBranchGeometry() {
     const newGeometry = this.branchGeometry.build(
       this.segments,
@@ -240,13 +350,20 @@ class TreeApp {
 
   update(time) {
     // Update growth animation
+    const wasAnimating = this.growthAnimator.isAnimating();
     const wasGrowingBranches = this.growthAnimator.isGrowingBranches();
     this.growthAnimator.update();
+
+    // Show hint when growth finishes
+    if (wasAnimating && !this.growthAnimator.isAnimating() && !this.hasCut) {
+      this.cutHint.classList.add('visible');
+      this.hintVisible = true;
+    }
 
     // Rebuild branch geometry during growth
     if (this.growthAnimator.isGrowingBranches()) {
       // Still growing — partial rebuild with interpolated segments
-      const getGrowth = (depth) => this.growthAnimator.getSegmentGrowth(depth);
+      const getGrowth = (segIndex) => this.growthAnimator.getSegmentGrowth(segIndex);
       this.branchGeometry.build(
         this.segments,
         this.cutExecutor.cutBranches,
@@ -280,15 +397,17 @@ class TreeApp {
 
     this.leafInstancer.updateInstances(
       this.cutExecutor.cutBranches,
-      this.growthAnimator.getLeafGrowthTime()
+      (segIndex) => this.growthAnimator.getLeafScale(segIndex)
     );
     this.leafInstancer.update(time);
 
-    // Collect all visible detached + riding leaves for rendering
-    const allDetached = this.leafPhysics.detachedLeaves.slice();
+    // Collect all visible riding + detached leaves for rendering
+    // Riding leaves first so they have priority in the instance limit
+    const allDetached = [];
     for (const piece of this.cutExecutor.fallingPieces) {
       allDetached.push(...piece.getWorldLeaves());
     }
+    allDetached.push(...this.leafPhysics.detachedLeaves);
     this.detachedLeafRenderer.update(allDetached, time);
 
     // Update effects
