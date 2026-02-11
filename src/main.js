@@ -246,17 +246,12 @@ class TreeApp {
   }
 
   update(time) {
-    // Update growth
-    const growthJustCompleted = this.growthAnimator.update();
-
-    if (growthJustCompleted) {
-      // Rebuild geometry now that growth is complete
-      this.rebuildBranchGeometry();
-    }
+    // Update leaf pop-in animation
+    this.growthAnimator.update();
 
     // Update falling pieces
     const groundY = this.sceneManager.trunkBottomY;
-    const spawnQueue = this.cutExecutor.update(
+    this.cutExecutor.update(
       groundY,
       (amount) => this.sceneManager.shake(amount)
     );
@@ -268,7 +263,7 @@ class TreeApp {
       }
     }
 
-    // Update leaves
+    // Update leaves (wind physics only after pop-in completes)
     if (!this.growthAnimator.isAnimating()) {
       this.leafPhysics.update(this.leaves, this.cutExecutor.cutBranches);
       this.leafPhysics.updateDetachedLeaves(this.sceneManager.height);
@@ -276,7 +271,6 @@ class TreeApp {
 
     this.leafInstancer.updateInstances(
       this.cutExecutor.cutBranches,
-      this.growthAnimator.getGrowthProgress(),
       this.growthAnimator.getLeafGrowthTime()
     );
     this.leafInstancer.update(time);

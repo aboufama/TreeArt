@@ -6,7 +6,7 @@ const MAX_LEAVES = 2000;
 
 export class LeafInstancer {
   constructor() {
-    this.geometry = this.createMapleLeafGeometry();
+    this.geometry = this.createLeafGeometry();
     this.material = new LeafMaterial();
     this.mesh = new THREE.InstancedMesh(this.geometry, this.material, MAX_LEAVES);
     this.mesh.count = 0;
@@ -32,37 +32,20 @@ export class LeafInstancer {
     this.euler = new THREE.Euler();
   }
 
-  createMapleLeafGeometry() {
-    // Create 5-lobed maple leaf shape
+  createLeafGeometry() {
+    // Natural leaf shape: pointed tip, wide body, tapered stem
     const shape = new THREE.Shape();
-    const s = 1;
 
-    // Start at top point
-    shape.moveTo(0, -s * 0.5);
+    // Start at stem (bottom center)
+    shape.moveTo(0, -0.5);
 
-    // Right side of center top
-    shape.quadraticCurveTo(s * 0.12, -s * 0.35, s * 0.2, -s * 0.4);
-    // Upper right point
-    shape.lineTo(s * 0.45, -s * 0.35);
-    // Inner notch
-    shape.quadraticCurveTo(s * 0.28, -s * 0.18, s * 0.25, -s * 0.08);
-    // Right point
-    shape.lineTo(s * 0.5, s * 0.05);
-    // Lower inner notch
-    shape.quadraticCurveTo(s * 0.25, s * 0.08, s * 0.18, s * 0.2);
-    // Lower right point
-    shape.lineTo(s * 0.25, s * 0.4);
-    // Bottom center
-    shape.quadraticCurveTo(s * 0.1, s * 0.28, 0, s * 0.3);
+    // Right side — curves out to widest point then narrows to tip
+    shape.bezierCurveTo(0.18, -0.42, 0.38, -0.18, 0.4, 0.0);
+    shape.bezierCurveTo(0.38, 0.18, 0.22, 0.38, 0, 0.55);
 
-    // Mirror left side
-    shape.quadraticCurveTo(-s * 0.1, s * 0.28, -s * 0.25, s * 0.4);
-    shape.lineTo(-s * 0.18, s * 0.2);
-    shape.quadraticCurveTo(-s * 0.25, s * 0.08, -s * 0.5, s * 0.05);
-    shape.lineTo(-s * 0.25, -s * 0.08);
-    shape.quadraticCurveTo(-s * 0.28, -s * 0.18, -s * 0.45, -s * 0.35);
-    shape.lineTo(-s * 0.2, -s * 0.4);
-    shape.quadraticCurveTo(-s * 0.12, -s * 0.35, 0, -s * 0.5);
+    // Left side — mirror back down to stem
+    shape.bezierCurveTo(-0.22, 0.38, -0.38, 0.18, -0.4, 0.0);
+    shape.bezierCurveTo(-0.38, -0.18, -0.18, -0.42, 0, -0.5);
 
     shape.closePath();
 
@@ -79,12 +62,14 @@ export class LeafInstancer {
     return geometry;
   }
 
-  setLeaves(leaves, cutBranches = new Set()) {
+  setLeaves(leaves) {
     this.leaves = leaves;
-    this.updateInstances(cutBranches);
+    // Don't render yet — the animation loop handles pop-in via updateInstances
+    this.mesh.count = 0;
+    this.mesh.instanceMatrix.needsUpdate = true;
   }
 
-  updateInstances(cutBranches = new Set(), growthProgress = 1, leafGrowStart = 0) {
+  updateInstances(cutBranches = new Set(), leafGrowStart = 0) {
     const now = performance.now();
     const elapsed = (now - leafGrowStart) / 1000;
     const growDuration = 1.5;
@@ -102,12 +87,10 @@ export class LeafInstancer {
       const stagger = (leaf.depth - 3) * 0.1;
       const leafProgress = Math.max(0, Math.min(1, (elapsed - stagger) / growDuration));
 
-      if (leafProgress <= 0 && growthProgress < 1) continue;
+      if (leafProgress <= 0) continue;
 
       // Ease-out for smooth pop-in
-      const scale = growthProgress >= 1
-        ? (1 - (1 - leafProgress) * (1 - leafProgress))
-        : 1;
+      const scale = 1 - (1 - leafProgress) * (1 - leafProgress);
 
       // Set position including wind offset
       const drawX = leaf.x + leaf.ox;

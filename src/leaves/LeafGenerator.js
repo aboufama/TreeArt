@@ -50,14 +50,14 @@ export class LeafGenerator {
         const x = bx + perpX * perpOffset + alongX * alongOffset;
         const y = by + perpY * perpOffset + alongY * alongOffset;
 
-        // Leaf size varies by depth
+        // Leaf size varies by depth (bigger leaves)
         const size = seg.depth >= 7
-          ? 10 + Math.random() * 8
+          ? 18 + Math.random() * 12
           : seg.depth >= 5
-            ? 12 + Math.random() * 9
+            ? 22 + Math.random() * 14
             : seg.depth >= 4
-              ? 14 + Math.random() * 9
-              : 16 + Math.random() * 7;
+              ? 26 + Math.random() * 12
+              : 28 + Math.random() * 10;
 
         this.leaves.push({
           x, y,
@@ -84,7 +84,7 @@ export class LeafGenerator {
           const x = seg.x2 + Math.cos(randAngle) * tipSpread * (0.3 + Math.random() * 0.7);
           const y = seg.y2 + Math.sin(randAngle) * tipSpread * (0.3 + Math.random() * 0.7);
 
-          const size = 10 + Math.random() * 10;
+          const size = 18 + Math.random() * 14;
 
           this.leaves.push({
             x, y,
