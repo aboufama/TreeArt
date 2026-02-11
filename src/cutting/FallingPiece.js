@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { getBranchColor } from '../utils/ColorUtils.js';
 
 const MAX_DEPTH = 9;
-const GRAVITY = 0.4;
+const GRAVITY = -0.4;
 
 export class FallingPiece {
   constructor(data, branchMaterial) {
@@ -265,7 +265,7 @@ export class FallingPiece {
           onSpawnPiece({
             x: wx, y: wy,
             vx: (Math.random() - 0.5) * 4,
-            vy: -3 - Math.random() * 3,
+            vy: 3 + Math.random() * 3,
             rotation: this.rotation,
             angularVel: (Math.random() - 0.5) * 0.15,
             segments: [{

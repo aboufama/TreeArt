@@ -133,7 +133,7 @@ export class CutExecutor {
       const piece = new FallingPiece({
         x: hitX, y: hitY,
         vx: slashDir * (1.5 + Math.random() * 1.5),
-        vy: -1 - Math.random() * 2,
+        vy: 1 + Math.random() * 2,
         rotation: 0,
         angularVel: slashDir * (0.015 + Math.random() * 0.03),
         segments: pieceSegments,
@@ -225,7 +225,7 @@ export class CutExecutor {
       const newPiece = new FallingPiece({
         x: worldHitX, y: worldHitY,
         vx: piece.vx + slashDir * 2,
-        vy: piece.vy - 2,
+        vy: piece.vy + 2,
         rotation: piece.rotation,
         angularVel: piece.angularVel + slashDir * 0.05,
         segments: newSegments,

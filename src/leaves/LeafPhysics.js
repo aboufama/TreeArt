@@ -59,7 +59,7 @@ export class LeafPhysics {
       x: leaf.x + leaf.ox,
       y: leaf.y + leaf.oy,
       vx: leaf.vx * 0.5 + (Math.random() - 0.5) * 1.5,
-      vy: leaf.vy * 0.3 - 0.5,
+      vy: leaf.vy * 0.3 + 0.5,
       size: leaf.size,
       angle: leaf.angle,
       angularVel: (Math.random() - 0.5) * 0.08,
@@ -78,7 +78,7 @@ export class LeafPhysics {
       const dl = this.detachedLeaves[i];
 
       // Gentle gravity
-      dl.vy += 0.04;
+      dl.vy -= 0.04;
 
       // Flutter sideways
       dl.flutter += dl.flutterSpeed;
@@ -89,7 +89,7 @@ export class LeafPhysics {
       dl.vy *= 0.99;
 
       // Cap falling speed for gentle drift
-      if (dl.vy > 1.8) dl.vy = 1.8;
+      if (dl.vy < -1.8) dl.vy = -1.8;
 
       dl.x += dl.vx;
       dl.y += dl.vy;

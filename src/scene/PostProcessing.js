@@ -73,11 +73,6 @@ const PainterlyShader = {
       float paper = noise(vUv * 8.0 + 50.0);
       color.rgb = mix(color.rgb, color.rgb * (0.92 + paper * 0.16), 0.25);
 
-      // Soft vignette
-      float vignette = 1.0 - length(vUv - 0.5) * 0.4;
-      vignette = smoothstep(0.4, 1.0, vignette);
-      color.rgb *= vignette;
-
       // Warm color grading for autumn feel
       color.r *= 1.04;
       color.g *= 1.01;

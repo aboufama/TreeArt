@@ -6,16 +6,16 @@ export const COLORS = {
   trunk: '#6B5344',
   tip: '#C4856A',
 
-  // Autumn leaf palette
+  // Autumn leaf palette (bright, vivid)
   autumn: [
-    '#C41E3A', '#B22222', '#8B0000',           // deep reds
-    '#E25822', '#D2691E', '#CC5500',           // oranges
-    '#DAA520', '#CD853F', '#B8860B',           // golds
-    '#E8A317', '#CF7F1B', '#C36A2D',           // amber/burnt orange
+    '#E63946', '#D94040', '#CC3333',           // bright reds
+    '#FF6B35', '#E8762B', '#F28C28',           // vivid oranges
+    '#FFD166', '#F0C040', '#E6A820',           // bright golds
+    '#FFAB40', '#F59E2A', '#E87D3E',           // warm amber
   ],
 
   // Rare green holdouts
-  green: ['#6B8E23', '#556B2F'],
+  green: ['#8DB600', '#7CB518'],
 
   // Sawdust colors
   sawdust: ['#C4A574', '#A08060'],
