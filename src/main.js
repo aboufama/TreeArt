@@ -439,16 +439,23 @@ class TreeApp {
 // Password gate
 const pwScreen = document.getElementById('password-screen');
 const pwInput = document.getElementById('pw');
+const pwSubmit = document.getElementById('pw-submit');
 
-pwInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    if (pwInput.value.toLowerCase().trim() === 'katie') {
+function tryPassword() {
+  if (pwInput.value.toLowerCase().trim() === 'katie') {
+    pwScreen.classList.add('fade-out');
+    setTimeout(() => {
       pwScreen.classList.add('hidden');
       new TreeApp();
-    } else {
-      pwInput.classList.add('wrong');
-      pwInput.value = '';
-      setTimeout(() => pwInput.classList.remove('wrong'), 300);
-    }
+    }, 800);
+  } else {
+    pwInput.classList.add('wrong');
+    pwInput.value = '';
+    setTimeout(() => pwInput.classList.remove('wrong'), 300);
   }
+}
+
+pwInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') tryPassword();
 });
+pwSubmit.addEventListener('click', tryPassword);

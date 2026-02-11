@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#FAF6F1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Tree</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -33,8 +36,18 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      transition: opacity 0.8s ease;
+    }
+    #password-screen.fade-out {
+      opacity: 0;
+      pointer-events: none;
     }
     #password-screen.hidden { display: none; }
+    .pw-form {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
     #pw {
       font-family: Georgia, serif;
       font-size: 16px;
@@ -45,13 +58,24 @@
       color: #5A4636;
       outline: none;
       text-align: center;
-      width: 200px;
+      width: 180px;
     }
     #pw::placeholder { color: #B8A898; }
     #pw.wrong {
       animation: shake 0.3s ease;
       border-color: #C47A6A;
     }
+    #pw-submit {
+      font-family: Georgia, serif;
+      font-size: 14px;
+      padding: 10px 16px;
+      border: 1px solid #C8BBAA;
+      border-radius: 6px;
+      background: #F4EFE6;
+      color: #5A4636;
+      cursor: pointer;
+    }
+    #pw-submit:active { background: #EDE7DC; }
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
       25% { transform: translateX(-6px); }
@@ -180,7 +204,10 @@
 </head>
 <body>
   <div id="password-screen">
-    <input id="pw" type="password" placeholder="Enter password" autofocus>
+    <div class="pw-form">
+      <input id="pw" type="password" placeholder="Enter password" autofocus>
+      <button id="pw-submit">Go</button>
+    </div>
   </div>
   <div id="loading">Growing...</div>
   <div id="cut-hint">Cut the Tree</div>
