@@ -429,7 +429,7 @@ const pwInput = document.getElementById('pw');
 const pwSubmit = document.getElementById('pw-submit');
 
 function tryPassword() {
-  if (pwInput.value.toLowerCase().trim() === 'katie') {
+  if (pwInput.value.toLowerCase().trim() === 'tree') {
     pwScreen.classList.add('fade-out');
     setTimeout(() => {
       pwScreen.classList.add('hidden');
