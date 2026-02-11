@@ -9,7 +9,10 @@ export class MouseTrail {
     this.mouseX = 0;
     this.mouseY = 0;
 
-    // Create cursor dot
+    // Detect touch device
+    this.isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+    // Create cursor dot (hidden on touch devices)
     const dotGeometry = new THREE.CircleGeometry(4, 16);
     const dotMaterial = new THREE.MeshBasicMaterial({
       color: 0x3C2D1E,
@@ -18,6 +21,11 @@ export class MouseTrail {
     });
     this.cursorDot = new THREE.Mesh(dotGeometry, dotMaterial);
     this.cursorDot.position.z = 0.5;
+    this.cursorDot.visible = !this.isTouchDevice;
+
+    // Track idle time for hiding dot when not moving
+    this.lastMoveTime = 0;
+    this.dotVisible = !this.isTouchDevice;
 
     // Create trail line
     this.trailGeometry = new THREE.BufferGeometry();
@@ -91,6 +99,10 @@ export class MouseTrail {
     this.mouseX = x;
     this.mouseY = y;
     this.cursorDot.position.set(x, y, 0.5);
+    this.lastMoveTime = performance.now();
+    if (!this.isTouchDevice) {
+      this.dotVisible = true;
+    }
   }
 
   update() {
@@ -109,8 +121,14 @@ export class MouseTrail {
       this.trailLine.visible = false;
     }
 
-    // Update cursor visibility
-    this.cursorDot.visible = !this.isSlashing || this.trail.length < 2;
+    // Update cursor visibility — hidden on touch devices, fades after idle on desktop
+    if (this.isTouchDevice) {
+      this.cursorDot.visible = false;
+    } else {
+      const idle = performance.now() - this.lastMoveTime > 2000;
+      if (idle) this.dotVisible = false;
+      this.cursorDot.visible = this.dotVisible && (!this.isSlashing || this.trail.length < 2);
+    }
   }
 
   updateTrailGeometry() {
