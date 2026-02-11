@@ -144,14 +144,6 @@ class TreeApp {
     // Clear cutting state
     this.cutExecutor.clear();
 
-    // Clear tree rings from scene
-    while (this.sceneManager.layers.treeRings.children.length > 0) {
-      const ring = this.sceneManager.layers.treeRings.children[0];
-      ring.geometry.dispose();
-      ring.material.dispose();
-      this.sceneManager.layers.treeRings.remove(ring);
-    }
-
     // Clear falling pieces
     while (this.sceneManager.layers.fallingPieces.children.length > 0) {
       const piece = this.sceneManager.layers.fallingPieces.children[0];
@@ -305,7 +297,6 @@ class TreeApp {
 
     // Update materials
     this.branchMaterial.update(time);
-    this.cutExecutor.treeRingGenerator.update(time);
 
     // Update post-processing
     this.postProcessing.update(time);

@@ -15,7 +15,6 @@ export class FallingPiece {
     this.segments = data.segments;
     this.thickness = data.thickness;
     this.leaves = data.leaves || [];
-    this.treeRings = data.treeRings || [];
 
     this.ridingLeaves = data.leaves || [];
     this.landed = false;
@@ -200,7 +199,7 @@ export class FallingPiece {
     const sin = Math.sin(this.rotation);
 
     for (let i = this.ridingLeaves.length - 1; i >= 0; i--) {
-      if (Math.random() < 0.3) {
+      if (Math.random() < 0.06) {
         const leaf = this.ridingLeaves[i];
         shed.push({
           x: this.x + leaf.lx * cos - leaf.ly * sin,
@@ -228,7 +227,7 @@ export class FallingPiece {
       this.groundTime++;
       // Leaves start fading immediately after settling
       if (this.groundTime > 30) {
-        this.leafAlpha = Math.max(0, this.leafAlpha - 0.02);
+        this.leafAlpha = Math.max(0, this.leafAlpha - 0.005);
       }
       // Branch starts fading only after leaves are gone
       if (this.leafAlpha <= 0 && this.groundTime > 90) {

@@ -1,10 +1,8 @@
 import { FallingPiece } from './FallingPiece.js';
-import { TreeRingGenerator } from './TreeRingGenerator.js';
 
 export class CutExecutor {
   constructor(branchMaterial) {
     this.branchMaterial = branchMaterial;
-    this.treeRingGenerator = new TreeRingGenerator();
     this.cutBranches = new Set();
     this.fallingPieces = [];
   }
@@ -111,15 +109,6 @@ export class CutExecutor {
       }
     }
 
-    // Create tree ring at cut point
-    const treeRing = this.treeRingGenerator.createCutCap(
-      { x: hitX, y: hitY },
-      cutThickness,
-      seg.angle,
-      seg.depth
-    );
-    sceneManager.layers.treeRings.add(treeRing);
-
     // Create falling piece
     if (pieceSegments.length > 0) {
       const piece = new FallingPiece({
@@ -130,8 +119,7 @@ export class CutExecutor {
         angularVel: slashDir * (0.015 + Math.random() * 0.03),
         segments: pieceSegments,
         thickness: cutThickness,
-        leaves: ridingLeaves,
-        treeRings: [treeRing]
+        leaves: ridingLeaves
       }, this.branchMaterial);
 
       this.fallingPieces.push(piece);
@@ -202,16 +190,6 @@ export class CutExecutor {
     piece.mesh.geometry.dispose();
     piece.mesh.geometry = piece.buildGeometry();
 
-    // Create tree ring at cut point
-    const angle = Math.atan2(seg.ly2 - seg.ly1, seg.lx2 - seg.lx1);
-    const treeRing = this.treeRingGenerator.createCutCap(
-      { x: worldHitX, y: worldHitY },
-      cutThickness,
-      angle + piece.rotation,
-      seg.depth
-    );
-    sceneManager.layers.treeRings.add(treeRing);
-
     // Create new falling piece
     if (newSegments.length > 0) {
       const newPiece = new FallingPiece({
@@ -272,6 +250,5 @@ export class CutExecutor {
     }
     this.fallingPieces = [];
     this.cutBranches.clear();
-    this.treeRingGenerator.clear();
   }
 }

@@ -1,5 +1,4 @@
-const DEPTH_DELAY = 420;       // ms between depth levels starting to grow
-const SEG_GROW_DURATION = 500; // ms for one segment to fully extend
+const SEG_GROW_DURATION = 500; // ms for one depth level to fully extend
 const MAX_DEPTH = 9;
 const LEAF_DURATION = 2500;    // ms for leaf pop-in to complete
 
@@ -7,7 +6,8 @@ export class GrowthAnimator {
   constructor() {
     this.startTime = 0;
     this.leafGrowStart = 0;
-    this.branchGrowDuration = MAX_DEPTH * DEPTH_DELAY + SEG_GROW_DURATION;
+    // Each depth waits for the previous to finish before starting
+    this.branchGrowDuration = MAX_DEPTH * SEG_GROW_DURATION;
     this.phase = 'idle'; // 'branches', 'leaves', 'idle'
   }
 
@@ -40,12 +40,13 @@ export class GrowthAnimator {
     return false;
   }
 
-  // Returns 0-1 growth fraction for a segment at the given depth
+  // Returns 0-1 growth fraction for a segment at the given depth.
+  // A depth only starts growing after the previous depth is complete.
   getSegmentGrowth(depth) {
     if (this.phase !== 'branches') return 1;
 
     const elapsed = performance.now() - this.startTime;
-    const segStart = depth * DEPTH_DELAY;
+    const segStart = depth * SEG_GROW_DURATION;
     return Math.max(0, Math.min(1, (elapsed - segStart) / SEG_GROW_DURATION));
   }
 
