@@ -64,22 +64,15 @@ export class SceneManager {
 
     this.renderer.setSize(width, height);
 
-    // Zoom out on mobile so the full tree is visible
-    const isMobile = width < 768;
-    const zoom = isMobile ? 0.75 : 1;
-    const camWidth = width / zoom;
-    const camHeight = height / zoom;
-    const offsetX = (camWidth - width) / 2;
-
-    this.camera.left = -offsetX;
-    this.camera.right = width + offsetX;
+    // Update orthographic camera to match screen dimensions
+    this.camera.left = 0;
+    this.camera.right = width;
     this.camera.top = 0;
-    this.camera.bottom = -camHeight;
+    this.camera.bottom = -height;
     this.camera.updateProjectionMatrix();
 
     this.width = width;
     this.height = height;
-    this.zoom = zoom;
   }
 
   get canvas() {

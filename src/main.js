@@ -276,9 +276,9 @@ class TreeApp {
       // Spawn sawdust
       this.sawdustSystem.spawn(hit.hitX, hit.hitY);
 
-      // Show note when trunk is cut
+      // Show note when trunk is cut — centered on trunk
       if (!this.noteShown && hit.seg.depth <= 1) {
-        this.showNote(hit.hitX, hit.hitY);
+        this.showNote(this.sceneManager.trunkX, hit.hitY);
       }
 
       // Rebuild branch geometry
