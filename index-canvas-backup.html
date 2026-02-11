@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tree</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #FAF6F1;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      overflow: hidden;
+    }
+    canvas { display: block; cursor: none; }
+  </style>
+</head>
+<body>
+  <canvas id="tree"></canvas>
+  <script>
+    const canvas = document.getElementById('tree');
+    const ctx = canvas.getContext('2d');
+
+    let currentSeed, seed;
+    let shakeAmount = 0;
+    let growProgress = 0;
+    let isGrowing = false;
+    let trunkX, trunkBottomY;
+    const maxDepth = 9;
+    const baseThickness = 28;
+
+    let particles = [];
+    let fallingPieces = [];
+    let branchSegments = [];
+    let cutBranches = new Set();
+    let leaves = [];
+    let leafGrowStart = 0;
+    let leavesGrowing = false;
+    let detachedLeaves = [];
+
+    let growthComplete = false;
+    let mouseTrail = [];
+    let mouseX = 0, mouseY = 0;
+    let prevMouseX = 0, prevMouseY = 0, mouseSpeed = 0;
+    let isSlashing = false;
+
+    // Offscreen canvas for clean alpha fading (avoids overlap artifacts)
+    const offCanvas = document.createElement('canvas');
+    const offCtx = offCanvas.getContext('2d');
+
+    const trunkColor = '#6B5344';
+    const tipColor = '#C4856A';
+    const shakeThreshold = 8;
+
+    function random() {
+      seed = (seed * 9301 + 49297) % 233280;
+      return seed / 233280;
+    }
+
+    function randomRange(min, max) {
+      return min + random() * (max - min);
+    }
+
+    function lerpColor(c1, c2, t) {
+      const r1 = parseInt(c1.slice(1,3), 16), g1 = parseInt(c1.slice(3,5), 16), b1 = parseInt(c1.slice(5,7), 16);
+      const r2 = parseInt(c2.slice(1,3), 16), g2 = parseInt(c2.slice(3,5), 16), b2 = parseInt(c2.slice(5,7), 16);
+      return `rgb(${Math.round(r1 + (r2 - r1) * t)},${Math.round(g1 + (g2 - g1) * t)},${Math.round(b1 + (b2 - b1) * t)})`;
+    }
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      offCanvas.width = canvas.width;
+      offCanvas.height = canvas.height;
+      trunkX = canvas.width / 2;
+      trunkBottomY = canvas.height;
+      if (!isGrowing && fallingPieces.length === 0) newTree();
+    }
+
+    function newTree() {
+      currentSeed = Math.random() * 100000;
+      shakeAmount = 0;
+      growProgress = 0;
+      isGrowing = true;
+      particles = [];
+      fallingPieces = [];
+      branchSegments = [];
+      cutBranches = new Set();
+      leaves = [];
+      leavesGrowing = false;
+      detachedLeaves = [];
+    }
+
+    function buildTreeStructure() {
+      branchSegments = [];
+      seed = currentSeed;
+      buildBranch(canvas.width / 2, trunkBottomY, -Math.PI / 2, 0, null);
+    }
+
+    function buildBranch(x, y, angle, depth, parentIndex) {
+      if (depth >= maxDepth) return undefined;
+
+      const baseLength = Math.min(canvas.height * 0.22, 180);
+      const lengthVariation = depth >= 6 ? randomRange(0.8, 1.1) : randomRange(0.85, 1.15);
+      const fullLength = baseLength * Math.pow(0.7, depth) * lengthVariation;
+      const startThick = baseThickness * Math.pow(0.68, depth);
+      const endThick = baseThickness * Math.pow(0.68, depth + 1);
+      const bend = randomRange(-0.08, 0.08);
+      const endAngle = angle + bend;
+      const endX = x + Math.cos(endAngle) * fullLength;
+      const endY = y + Math.sin(endAngle) * fullLength;
+
+      const segIndex = branchSegments.length;
+      branchSegments.push({
+        index: segIndex, parent: parentIndex,
+        x1: x, y1: y, x2: endX, y2: endY,
+        angle: endAngle, depth,
+        thickness: startThick, endThickness: endThick,
+        children: [], isCut: false
+      });
+
+      let childAngles = [];
+      if (depth === 0) {
+        childAngles.push(endAngle + randomRange(-0.1, 0.1));
+        randomRange(0.4, 1.6);
+      } else if (depth === 1) {
+        const n = random() < 0.6 ? 3 : 2;
+        for (let i = 0; i < n; i++) {
+          childAngles.push(endAngle + (n === 2 ? (i === 0 ? -0.7 : 0.7) : (i - 1) * 0.6) + randomRange(-0.2, 0.2));
+          randomRange(0.25, 1.75);
+        }
+      } else {
+        const r1 = random(), r2 = random();
+        let n = depth >= 7 ? (r1 < 0.75 ? 1 : (r2 < 0.6 ? 0 : 2)) :
+                depth >= 5 ? (r1 < 0.55 ? 1 : 2) :
+                depth < 4 ? (r1 < 0.7 ? 2 : 3) : (r1 < 0.5 ? 2 : (r2 < 0.7 ? 1 : 3));
+        const spread = 0.5 + depth * 0.05;
+        for (let i = 0; i < n; i++) {
+          let ba = endAngle + (n === 1 ? randomRange(-spread * 0.5, spread * 0.5) :
+                   n === 2 ? (i === 0 ? -1 : 1) * randomRange(spread * 0.4, spread) :
+                   (i - 1) * randomRange(spread * 0.5, spread));
+          const pruneRand = random();
+          randomRange(0.35, 1.65);
+          if (pruneRand > (depth < 4 ? 0 : depth >= 6 ? 0.2 : 0.12)) childAngles.push(ba);
+        }
+      }
+
+      for (const ca of childAngles) {
+        const ci = buildBranch(endX, endY, ca, depth + 1, segIndex);
+        if (ci !== undefined) branchSegments[segIndex].children.push(ci);
+      }
+      return segIndex;
+    }
+
+    const autumnColors = [
+      '#C41E3A', '#B22222', '#8B0000',           // deep reds
+      '#E25822', '#D2691E', '#CC5500',           // oranges
+      '#DAA520', '#CD853F', '#B8860B',           // golds
+      '#E8A317', '#CF7F1B', '#C36A2D',           // amber/burnt orange
+    ];
+    const greenColors = ['#6B8E23', '#556B2F'];   // rare green holdouts
+
+    function pickLeafColor() {
+      if (Math.random() < 0.08) return greenColors[Math.floor(Math.random() * greenColors.length)];
+      return autumnColors[Math.floor(Math.random() * autumnColors.length)];
+    }
+
+    function generateLeaves() {
+      leaves = [];
+      for (const seg of branchSegments) {
+        if (seg.depth < 3) continue;
+
+        const segLen = Math.sqrt((seg.x2 - seg.x1) ** 2 + (seg.y2 - seg.y1) ** 2);
+        if (segLen < 3) continue;
+
+        const angle = Math.atan2(seg.y2 - seg.y1, seg.x2 - seg.x1);
+        const perpX = Math.cos(angle + Math.PI / 2);
+        const perpY = Math.sin(angle + Math.PI / 2);
+        const alongX = Math.cos(angle);
+        const alongY = Math.sin(angle);
+
+        // Dense leaves — tips get clusters, mid branches get good coverage
+        let count;
+        if (seg.depth >= 7) count = 6 + Math.floor(Math.random() * 6);       // 6-11 leaves
+        else if (seg.depth >= 5) count = 5 + Math.floor(Math.random() * 5);   // 5-9 leaves
+        else if (seg.depth >= 4) count = 3 + Math.floor(Math.random() * 4);   // 3-6 leaves
+        else count = 2 + Math.floor(Math.random() * 2);                       // 2-3 leaves (depth 3)
+
+        // Spread radius scales with depth — outer branches fan out more
+        const spreadRadius = seg.depth >= 6 ? 22 + Math.random() * 18 :
+                             seg.depth >= 4 ? 16 + Math.random() * 14 :
+                             10 + Math.random() * 8;
+
+        for (let i = 0; i < count; i++) {
+          const t = 0.15 + Math.random() * 0.8;  // position along branch
+          const bx = seg.x1 + (seg.x2 - seg.x1) * t;
+          const by = seg.y1 + (seg.y2 - seg.y1) * t;
+
+          // Spread outward from branch in a cloud shape
+          const perpOffset = (Math.random() - 0.5) * 2 * spreadRadius;
+          const alongOffset = (Math.random() - 0.5) * spreadRadius * 0.6;
+          const x = bx + perpX * perpOffset + alongX * alongOffset;
+          const y = by + perpY * perpOffset + alongY * alongOffset;
+
+          // Leaf size: slightly bigger for a full canopy
+          const size = seg.depth >= 7 ? 10 + Math.random() * 8 :
+                       seg.depth >= 5 ? 12 + Math.random() * 9 :
+                       seg.depth >= 4 ? 14 + Math.random() * 9 :
+                       16 + Math.random() * 7;
+
+          leaves.push({
+            x, y, bx, by,
+            segIndex: seg.index,
+            t,
+            angle: (Math.random() - 0.5) * Math.PI * 0.8,
+            size,
+            color: pickLeafColor(),
+            depth: seg.depth,
+            ox: 0, oy: 0, vx: 0, vy: 0
+          });
+        }
+
+        // Extra cluster at branch tips (endpoints) for fullness
+        if (seg.children.length === 0 && seg.depth >= 5) {
+          const tipCount = 4 + Math.floor(Math.random() * 5); // 4-8 extra leaves at tip
+          for (let i = 0; i < tipCount; i++) {
+            const tipSpread = 18 + Math.random() * 20;
+            const randAngle = Math.random() * Math.PI * 2;
+            const x = seg.x2 + Math.cos(randAngle) * tipSpread * (0.3 + Math.random() * 0.7);
+            const y = seg.y2 + Math.sin(randAngle) * tipSpread * (0.3 + Math.random() * 0.7);
+
+            const size = 10 + Math.random() * 10;
+            leaves.push({
+              x, y, bx: seg.x2, by: seg.y2,
+              segIndex: seg.index,
+              t: 0.95,
+              angle: (Math.random() - 0.5) * Math.PI * 0.8,
+              size,
+              color: pickLeafColor(),
+              depth: seg.depth,
+              ox: 0, oy: 0, vx: 0, vy: 0
+            });
+          }
+        }
+      }
+    }
+
+    function drawMapleLeaf(c, x, y, size, angle, color, alpha) {
+      c.save();
+      c.translate(x, y);
+      c.rotate(angle);
+      c.globalAlpha = (c.globalAlpha || 1) * alpha;
+
+      const s = size;
+
+      // Draw a stem
+      c.strokeStyle = '#7B5B3A';
+      c.lineWidth = Math.max(0.5, s * 0.08);
+      c.beginPath();
+      c.moveTo(0, s * 0.6);
+      c.lineTo(0, s * 0.1);
+      c.stroke();
+
+      // 5-lobed maple leaf shape
+      c.fillStyle = color;
+      c.beginPath();
+      c.moveTo(0, -s * 0.5);                            // top point
+
+      c.quadraticCurveTo(s * 0.12, -s * 0.35, s * 0.2, -s * 0.4);   // right of center top
+      c.lineTo(s * 0.45, -s * 0.35);                    // upper right point
+      c.quadraticCurveTo(s * 0.28, -s * 0.18, s * 0.25, -s * 0.08); // inner notch
+      c.lineTo(s * 0.5, s * 0.05);                      // right point
+      c.quadraticCurveTo(s * 0.25, s * 0.08, s * 0.18, s * 0.2);    // lower inner notch
+      c.lineTo(s * 0.25, s * 0.4);                      // lower right point
+      c.quadraticCurveTo(s * 0.1, s * 0.28, 0, s * 0.3);            // bottom center
+
+      // Mirror left side
+      c.quadraticCurveTo(-s * 0.1, s * 0.28, -s * 0.25, s * 0.4);   // lower left point
+      c.lineTo(-s * 0.18, s * 0.2);
+      c.quadraticCurveTo(-s * 0.25, s * 0.08, -s * 0.5, s * 0.05);  // left point
+      c.lineTo(-s * 0.25, -s * 0.08);
+      c.quadraticCurveTo(-s * 0.28, -s * 0.18, -s * 0.45, -s * 0.35); // upper left point
+      c.lineTo(-s * 0.2, -s * 0.4);
+      c.quadraticCurveTo(-s * 0.12, -s * 0.35, 0, -s * 0.5);       // back to top
+
+      c.closePath();
+      c.fill();
+
+      // Light vein lines for detail
+      c.strokeStyle = color;
+      c.lineWidth = Math.max(0.3, s * 0.04);
+      c.globalAlpha *= 0.4;
+      c.beginPath();
+      c.moveTo(0, s * 0.25);
+      c.lineTo(0, -s * 0.45);
+      c.moveTo(0, s * 0.05);
+      c.lineTo(s * 0.4, -s * 0.25);
+      c.moveTo(0, s * 0.05);
+      c.lineTo(-s * 0.4, -s * 0.25);
+      c.moveTo(0, s * 0.15);
+      c.lineTo(s * 0.35, s * 0.1);
+      c.moveTo(0, s * 0.15);
+      c.lineTo(-s * 0.35, s * 0.1);
+      c.stroke();
+
+      c.restore();
+    }
+
+    function getDescendants(segIndex) {
+      const result = [], stack = [segIndex];
+      while (stack.length) {
+        const idx = stack.pop();
+        result.push(idx);
+        const seg = branchSegments[idx];
+        if (seg?.children) stack.push(...seg.children);
+      }
+      return result;
+    }
+
+    function draw() {
+      ctx.save();
+      if (shakeAmount > 0.5) {
+        ctx.translate((Math.random() - 0.5) * shakeAmount, (Math.random() - 0.5) * shakeAmount);
+        shakeAmount *= 0.85;
+      }
+      ctx.clearRect(-50, -50, canvas.width + 100, canvas.height + 100);
+
+      if (isGrowing) {
+        growthComplete = true;
+        seed = currentSeed;
+        drawGrowingBranch(canvas.width / 2, trunkBottomY, -Math.PI / 2, 0, growProgress, 0, 1);
+      } else {
+        for (const seg of branchSegments) {
+          if (cutBranches.has(seg.index)) continue;
+          ctx.fillStyle = lerpColor(trunkColor, tipColor, seg.depth / maxDepth);
+          drawBranchShape(seg.x1, seg.y1, seg.x2, seg.y2, seg.thickness, seg.endThickness);
+          if (!seg.isCut) {
+            ctx.beginPath();
+            ctx.arc(seg.x2, seg.y2, seg.endThickness / 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
+      // Draw leaves on standing tree
+      if (!isGrowing && leaves.length > 0) {
+        const now = performance.now();
+        const elapsed = (now - leafGrowStart) / 1000; // seconds since leaf growth started
+        const growDuration = 1.5; // total growth animation time
+
+        for (const leaf of leaves) {
+          if (leaf.size <= 0) continue;
+          if (cutBranches.has(leaf.segIndex)) continue;
+          const seg = branchSegments[leaf.segIndex];
+          if (!seg) continue;
+
+          // Staggered growth: deeper branches grow later
+          const stagger = (leaf.depth - 3) * 0.1;
+          const leafProgress = Math.max(0, Math.min(1, (elapsed - stagger) / growDuration));
+          if (leafProgress <= 0) continue;
+
+          // Ease-out for smooth pop-in
+          const scale = 1 - (1 - leafProgress) * (1 - leafProgress);
+
+          const drawX = leaf.x + leaf.ox;
+          const drawY = leaf.y + leaf.oy;
+
+          // Draw tiny twig from branch attachment to leaf
+          ctx.save();
+          ctx.globalAlpha = scale * 0.85;
+          ctx.strokeStyle = tipColor;
+          ctx.lineWidth = Math.max(0.5, 1.2 - seg.depth * 0.08);
+          ctx.beginPath();
+          ctx.moveTo(leaf.bx, leaf.by);
+          ctx.lineTo(drawX, drawY);
+          ctx.stroke();
+          ctx.restore();
+
+          drawMapleLeaf(ctx, drawX, drawY, leaf.size * scale, leaf.angle, leaf.color, scale);
+        }
+
+        if (elapsed > growDuration + 1.5) leavesGrowing = false;
+      }
+
+      // Draw detached falling leaves
+      for (const dl of detachedLeaves) {
+        drawMapleLeaf(ctx, dl.x, dl.y, dl.size, dl.angle, dl.color, dl.life);
+      }
+
+      // Draw falling pieces
+      for (const piece of fallingPieces) {
+        const alpha = piece.alpha || 1;
+        const useOff = alpha < 1;
+        const c = useOff ? offCtx : ctx;
+
+        if (useOff) {
+          offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+        }
+
+        c.save();
+        c.translate(piece.x, piece.y);
+        c.rotate(piece.rotation);
+
+        for (const seg of piece.segments) {
+          if (seg.fallen) continue;
+          c.fillStyle = lerpColor(trunkColor, tipColor, seg.depth / maxDepth);
+          drawBranchShapeTo(c, seg.lx1, seg.ly1, seg.lx2, seg.ly2, seg.thick1, seg.thick2);
+          if (seg.hasChildren) {
+            c.beginPath();
+            c.arc(seg.lx2, seg.ly2, seg.thick2 / 2, 0, Math.PI * 2);
+            c.fill();
+          }
+        }
+        // Draw leaves attached to this falling piece (with twigs)
+        if (piece.leaves) {
+          for (const leaf of piece.leaves) {
+            c.save();
+            c.globalAlpha = 0.85;
+            c.strokeStyle = tipColor;
+            c.lineWidth = 0.8;
+            c.beginPath();
+            c.moveTo(leaf.bx, leaf.by);
+            c.lineTo(leaf.lx, leaf.ly);
+            c.stroke();
+            c.restore();
+            drawMapleLeaf(c, leaf.lx, leaf.ly, leaf.size, leaf.angle, leaf.color, 1);
+          }
+        }
+        c.restore();
+
+        if (useOff) {
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.drawImage(offCanvas, 0, 0);
+          ctx.restore();
+        }
+      }
+
+      drawParticles();
+      drawCursor();
+      ctx.restore();
+    }
+
+    function drawGrowingBranch(x, y, angle, depth, gp, ct, ss) {
+      if (depth >= maxDepth) return;
+      const baseLength = Math.min(canvas.height * 0.22, 180);
+      const lv = depth >= 6 ? randomRange(0.8, 1.1) : randomRange(0.85, 1.15);
+      const fl = baseLength * Math.pow(0.7, depth) * lv;
+      const st = baseThickness * Math.pow(0.68, depth);
+      const et = baseThickness * Math.pow(0.68, depth + 1);
+      const bend = randomRange(-0.08, 0.08);
+      const ea = angle + bend;
+      const fex = x + Math.cos(ea) * fl, fey = y + Math.sin(ea) * fl;
+
+      let cd = [];
+      if (depth === 0) { cd.push({ a: ea + randomRange(-0.1, 0.1), s: randomRange(0.4, 1.6) }); }
+      else if (depth === 1) {
+        const n = random() < 0.6 ? 3 : 2;
+        for (let i = 0; i < n; i++) cd.push({ a: ea + (n === 2 ? (i === 0 ? -0.7 : 0.7) : (i - 1) * 0.6) + randomRange(-0.2, 0.2), s: randomRange(0.25, 1.75) });
+      } else {
+        const r1 = random(), r2 = random();
+        let n = depth >= 7 ? (r1 < 0.75 ? 1 : (r2 < 0.6 ? 0 : 2)) : depth >= 5 ? (r1 < 0.55 ? 1 : 2) : depth < 4 ? (r1 < 0.7 ? 2 : 3) : (r1 < 0.5 ? 2 : (r2 < 0.7 ? 1 : 3));
+        const sp = 0.5 + depth * 0.05;
+        for (let i = 0; i < n; i++) {
+          let ba = ea + (n === 1 ? randomRange(-sp * 0.5, sp * 0.5) : n === 2 ? (i === 0 ? -1 : 1) * randomRange(sp * 0.4, sp) : (i - 1) * randomRange(sp * 0.5, sp));
+          const pr = random(), spd = randomRange(0.35, 1.65);
+          if (pr > (depth < 4 ? 0 : depth >= 6 ? 0.2 : 0.12)) cd.push({ a: ba, s: spd });
+        }
+      }
+
+      const sd = 1 / ss, tis = gp * 45 - ct, ls = Math.max(0, Math.min(1, tis * ss)), set = ct + sd;
+      for (const c of cd) drawGrowingBranch(fex, fey, c.a, depth + 1, gp, set, c.s);
+      if (ls < 1) growthComplete = false;
+      if (tis <= 0) return;
+
+      ctx.fillStyle = lerpColor(trunkColor, tipColor, depth / maxDepth);
+      if (ls >= 1) {
+        drawBranchShape(x, y, fex, fey, st, et);
+        ctx.beginPath(); ctx.arc(fex, fey, et / 2, 0, Math.PI * 2); ctx.fill();
+      } else {
+        const l = fl * ls, cet = st + (et - st) * ls;
+        const ex = x + Math.cos(ea) * l, ey = y + Math.sin(ea) * l;
+        drawBranchShape(x, y, ex, ey, st, cet);
+        ctx.beginPath(); ctx.arc(ex, ey, cet / 2, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    function drawBranchShape(x1, y1, x2, y2, t1, t2) {
+      drawBranchShapeTo(ctx, x1, y1, x2, y2, t1, t2);
+    }
+
+    function drawBranchShapeTo(c, x1, y1, x2, y2, t1, t2) {
+      const a = Math.atan2(y2 - y1, x2 - x1), p = a + Math.PI / 2;
+      c.beginPath();
+      c.moveTo(x1 + Math.cos(p) * t1 / 2, y1 + Math.sin(p) * t1 / 2);
+      c.lineTo(x2 + Math.cos(p) * t2 / 2, y2 + Math.sin(p) * t2 / 2);
+      c.lineTo(x2 - Math.cos(p) * t2 / 2, y2 - Math.sin(p) * t2 / 2);
+      c.lineTo(x1 - Math.cos(p) * t1 / 2, y1 - Math.sin(p) * t1 / 2);
+      c.closePath(); c.fill();
+    }
+
+    function spawnSawdust(x, y) {
+      for (let i = 0; i < 8; i++) {
+        particles.push({
+          x: x + (Math.random() - 0.5) * 8, y,
+          vx: (Math.random() - 0.5) * 3, vy: -Math.random() * 2 - 1,
+          size: Math.random() * 2.5 + 1, rotation: Math.random() * Math.PI,
+          rotationSpeed: (Math.random() - 0.5) * 0.15,
+          color: Math.random() < 0.5 ? '#C4A574' : '#A08060', life: 1
+        });
+      }
+    }
+
+    function updateParticles() {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.vx *= 0.98;
+        p.rotation += p.rotationSpeed; p.life -= 0.015;
+        if (p.life <= 0 || p.y > canvas.height) particles.splice(i, 1);
+      }
+    }
+
+    function updateLeafWind() {
+      if (isGrowing || leaves.length === 0) return;
+      mouseSpeed = Math.sqrt((mouseX - prevMouseX) ** 2 + (mouseY - prevMouseY) ** 2);
+      prevMouseX = mouseX;
+      prevMouseY = mouseY;
+      const windRadius = 45;
+      const windForce = 0.6;
+
+      for (const leaf of leaves) {
+        if (cutBranches.has(leaf.segIndex)) continue;
+
+        // Check distance to mouse
+        const lx = (leaf.x + leaf.ox) - mouseX;
+        const ly = (leaf.y + leaf.oy) - mouseY;
+        const dist = Math.sqrt(lx * lx + ly * ly);
+
+        if (dist < windRadius && dist > 0.1 && mouseSpeed > 1) {
+          const strength = (1 - dist / windRadius) * windForce;
+          leaf.vx += (lx / dist) * strength;
+          leaf.vy += (ly / dist) * strength;
+
+          // Small chance to detach leaf when mouse is moving nearby
+          if (dist < windRadius * 0.6 && Math.random() < 0.006) {
+            detachedLeaves.push({
+              x: leaf.x + leaf.ox, y: leaf.y + leaf.oy,
+              vx: leaf.vx * 0.5 + (Math.random() - 0.5) * 1.5,
+              vy: leaf.vy * 0.3 - 0.5,
+              size: leaf.size,
+              angle: leaf.angle,
+              angularVel: (Math.random() - 0.5) * 0.08,
+              color: leaf.color,
+              life: 1,
+              flutter: Math.random() * Math.PI * 2, // phase offset for flutter
+              flutterSpeed: 0.03 + Math.random() * 0.03
+            });
+            // Remove from tree leaves
+            leaf.size = 0; // mark as gone
+          }
+        }
+
+        // Spring back to original position + heavy damping (gentle sway, not bouncy)
+        leaf.vx += -leaf.ox * 0.05;
+        leaf.vy += -leaf.oy * 0.05;
+        leaf.vx *= 0.82;
+        leaf.vy *= 0.82;
+        leaf.ox += leaf.vx;
+        leaf.oy += leaf.vy;
+      }
+    }
+
+    function updateDetachedLeaves() {
+      for (let i = detachedLeaves.length - 1; i >= 0; i--) {
+        const dl = detachedLeaves[i];
+        // Gentle gravity
+        dl.vy += 0.04;
+        // Flutter sideways (sinusoidal)
+        dl.flutter += dl.flutterSpeed;
+        dl.vx += Math.sin(dl.flutter) * 0.12;
+        // Air resistance
+        dl.vx *= 0.98;
+        dl.vy *= 0.99;
+        // Cap falling speed for gentle drift
+        if (dl.vy > 1.8) dl.vy = 1.8;
+
+        dl.x += dl.vx;
+        dl.y += dl.vy;
+        dl.angle += dl.angularVel;
+        dl.angularVel += Math.sin(dl.flutter) * 0.003;
+        dl.angularVel *= 0.98;
+
+        // Fade when near ground
+        if (dl.y > canvas.height - 40) {
+          dl.life -= 0.025;
+        }
+        // Remove if off screen or faded
+        if (dl.life <= 0 || dl.y > canvas.height + 20 || dl.x < -50 || dl.x > canvas.width + 50) {
+          detachedLeaves.splice(i, 1);
+        }
+      }
+    }
+
+    function drawParticles() {
+      for (const p of particles) {
+        ctx.save();
+        ctx.translate(p.x, p.y); ctx.rotate(p.rotation);
+        ctx.fillStyle = p.color; ctx.globalAlpha = p.life;
+        ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function updateMouseTrail() {
+      for (let i = mouseTrail.length - 1; i >= 0; i--) {
+        mouseTrail[i].life -= 0.1;
+        if (mouseTrail[i].life <= 0) mouseTrail.splice(i, 1);
+      }
+    }
+
+    function drawCursor() {
+      if (isSlashing && mouseTrail.length >= 2) {
+        offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+        offCtx.save(); offCtx.lineCap = 'round'; offCtx.lineJoin = 'round';
+        offCtx.strokeStyle = 'rgb(60, 45, 30)';
+        for (let i = 1; i < mouseTrail.length; i++) {
+          const prev = mouseTrail[i - 1], curr = mouseTrail[i];
+          const life = Math.min(prev.life, curr.life);
+          offCtx.beginPath(); offCtx.moveTo(prev.x, prev.y); offCtx.lineTo(curr.x, curr.y);
+          offCtx.lineWidth = 3 + life * 4;
+          offCtx.stroke();
+        }
+        offCtx.restore();
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        ctx.drawImage(offCanvas, 0, 0);
+        ctx.restore();
+      } else {
+        ctx.beginPath(); ctx.arc(mouseX, mouseY, 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(60, 45, 30, 0.4)'; ctx.fill();
+      }
+    }
+
+    // Compute the 4 corners of every branch segment in a piece (world coords)
+    function getPieceCorners(piece) {
+      const cos = Math.cos(piece.rotation), sin = Math.sin(piece.rotation);
+      const pts = [];
+      for (const seg of piece.segments) {
+        if (seg.fallen) continue;
+        const sa = Math.atan2(seg.ly2 - seg.ly1, seg.lx2 - seg.lx1);
+        const px = Math.cos(sa + Math.PI / 2), py = Math.sin(sa + Math.PI / 2);
+        const ht1 = seg.thick1 / 2, ht2 = seg.thick2 / 2;
+        const locals = [
+          [seg.lx1 + px * ht1, seg.ly1 + py * ht1],
+          [seg.lx2 + px * ht2, seg.ly2 + py * ht2],
+          [seg.lx2 - px * ht2, seg.ly2 - py * ht2],
+          [seg.lx1 - px * ht1, seg.ly1 - py * ht1]
+        ];
+        for (const [lx, ly] of locals) {
+          pts.push({
+            lx, ly,
+            wx: piece.x + lx * cos - ly * sin,
+            wy: piece.y + lx * sin + ly * cos
+          });
+        }
+      }
+      return { pts, cos, sin };
+    }
+
+    // Center of mass in local coordinates, weighted by segment area
+    function getPieceCOM(piece) {
+      let totalMass = 0, cmx = 0, cmy = 0;
+      for (const seg of piece.segments) {
+        if (seg.fallen) continue;
+        const mx = (seg.lx1 + seg.lx2) / 2, my = (seg.ly1 + seg.ly2) / 2;
+        const len = Math.sqrt((seg.lx2 - seg.lx1) ** 2 + (seg.ly2 - seg.ly1) ** 2);
+        const mass = len * ((seg.thick1 + seg.thick2) / 2);
+        cmx += mx * mass; cmy += my * mass; totalMass += mass;
+      }
+      if (totalMass > 0) { cmx /= totalMass; cmy /= totalMass; }
+      return { x: cmx, y: cmy, mass: totalMass || 1 };
+    }
+
+    function updateFallingPieces() {
+      const gravity = 0.4, groundY = canvas.height;
+
+      for (let i = fallingPieces.length - 1; i >= 0; i--) {
+        const piece = fallingPieces[i];
+
+        // Settled pieces only fade out
+        if (piece.settled) {
+          piece.groundTime = (piece.groundTime || 0) + 1;
+          if (piece.groundTime > 120) piece.alpha = Math.max(0, (piece.alpha || 1) - 0.01);
+          if (piece.alpha <= 0) fallingPieces.splice(i, 1);
+          continue;
+        }
+
+        // --- Movement ---
+        if (piece.pivoting) {
+          // Position & rotation controlled entirely by pivot math below
+        } else {
+          // Airborne: standard physics
+          piece.vy += gravity;
+          piece.x += piece.vx;
+          piece.y += piece.vy;
+          piece.rotation += piece.angularVel;
+          piece.angularVel *= 0.998;
+        }
+
+        // --- Compute all branch-shape corners ---
+        const { pts: corners, cos, sin } = getPieceCorners(piece);
+        if (corners.length === 0) continue;
+
+        // Find lowest point (highest world-Y)
+        let maxWY = -Infinity, contactCorner = null;
+        for (const c of corners) {
+          if (c.wy > maxWY) { maxWY = c.wy; contactCorner = c; }
+        }
+
+        // Still airborne
+        if (maxWY < groundY) {
+          piece.pivoting = false;
+          continue;
+        }
+
+        // --- Ground contact ---
+        piece.y -= (maxWY - groundY);
+
+        // Shed branches on very first ground contact
+        if (!piece.impactDone && piece.segments.length > 1) {
+          piece.impactDone = true;
+          let dropped = 0;
+          const maxDrop = 2 + Math.floor(Math.random() * 3);
+          for (let j = piece.segments.length - 1; j >= 0 && dropped < maxDrop; j--) {
+            const seg = piece.segments[j];
+            if (!seg.fallen && seg.depth >= 3) {
+              seg.fallen = true;
+              dropped++;
+              const wx = piece.x + seg.lx1 * cos - seg.ly1 * sin;
+              const wy = piece.y + seg.lx1 * sin + seg.ly1 * cos;
+              // Transfer leaves near this shed segment
+              const shedLeaves = [];
+              if (piece.leaves) {
+                for (let li = piece.leaves.length - 1; li >= 0; li--) {
+                  const lf = piece.leaves[li];
+                  const dlx = lf.lx - seg.lx1, dly = lf.ly - seg.ly1;
+                  const dist = Math.sqrt(dlx * dlx + dly * dly);
+                  const segLen = Math.sqrt((seg.lx2 - seg.lx1) ** 2 + (seg.ly2 - seg.ly1) ** 2);
+                  if (dist < segLen * 1.5) {
+                    shedLeaves.push({ lx: lf.lx - seg.lx1, ly: lf.ly - seg.ly1, bx: (lf.bx || lf.lx) - seg.lx1, by: (lf.by || lf.ly) - seg.ly1, size: lf.size, angle: lf.angle, color: lf.color });
+                    piece.leaves.splice(li, 1);
+                  }
+                }
+              }
+              fallingPieces.push({
+                x: wx, y: wy,
+                vx: (Math.random() - 0.5) * 4,
+                vy: -3 - Math.random() * 3,
+                rotation: piece.rotation,
+                angularVel: (Math.random() - 0.5) * 0.15,
+                segments: [{
+                  lx1: 0, ly1: 0,
+                  lx2: seg.lx2 - seg.lx1, ly2: seg.ly2 - seg.ly1,
+                  thick1: seg.thick1, thick2: seg.thick2,
+                  depth: seg.depth, hasChildren: false
+                }],
+                thickness: seg.thick1, landed: false, groundTime: 0, alpha: 1,
+                leaves: shedLeaves
+              });
+            }
+          }
+        }
+
+        // Bounce if arriving fast
+        if (!piece.pivoting && piece.vy > 3) {
+          piece.vy *= -0.25;
+          piece.vx *= 0.6;
+          piece.angularVel *= 0.5;
+          if (piece.thickness >= shakeThreshold) shakeAmount = Math.min(4, piece.thickness / 6);
+          continue;
+        }
+
+        // --- Pivot / topple physics ---
+        piece.vy = 0;
+        piece.pivoting = true;
+
+        if (!piece.groundShake) {
+          piece.groundShake = true;
+          if (piece.thickness >= shakeThreshold) shakeAmount = Math.min(3, piece.thickness / 7);
+        }
+
+        // Recalculate trig after y-adjustment
+        const c2 = Math.cos(piece.rotation), s2 = Math.sin(piece.rotation);
+
+        // Find all points currently touching the ground (within threshold)
+        const gThresh = 5;
+        let touchLeft = Infinity, touchRight = -Infinity;
+        for (const c of corners) {
+          const wy = piece.y + c.lx * s2 + c.ly * c2;
+          if (wy >= groundY - gThresh) {
+            const wx = piece.x + c.lx * c2 - c.ly * s2;
+            touchLeft = Math.min(touchLeft, wx);
+            touchRight = Math.max(touchRight, wx);
+          }
+        }
+
+        // Center of mass
+        const com = getPieceCOM(piece);
+        const comWX = piece.x + com.x * c2 - com.y * s2;
+
+        const supportWidth = touchRight - touchLeft;
+        const isStable = supportWidth > 8 && comWX >= touchLeft && comWX <= touchRight;
+
+        if (isStable) {
+          // Piece is resting on a wide enough base — damp to a stop
+          piece.angularVel *= 0.8;
+          piece.vx *= 0.85;
+          if (Math.abs(piece.angularVel) < 0.001 && Math.abs(piece.vx) < 0.15) {
+            piece.settled = true;
+            piece.landed = true;
+            piece.angularVel = 0;
+            piece.vx = 0;
+          }
+        } else {
+          // Topple: gravity torque around the ground contact point
+          const cpWX = piece.x + contactCorner.lx * c2 - contactCorner.ly * s2;
+          const leverX = comWX - cpWX;
+
+          // Moment of inertia about the contact point (parallel axis theorem)
+          let momentI = 0;
+          for (const seg of piece.segments) {
+            if (seg.fallen) continue;
+            const cx = (seg.lx1 + seg.lx2) / 2, cy = (seg.ly1 + seg.ly2) / 2;
+            const dx = cx - contactCorner.lx, dy = cy - contactCorner.ly;
+            const r2 = dx * dx + dy * dy;
+            const len = Math.sqrt((seg.lx2 - seg.lx1) ** 2 + (seg.ly2 - seg.ly1) ** 2);
+            const mass = len * ((seg.thick1 + seg.thick2) / 2);
+            momentI += mass * (r2 + len * len / 12);
+          }
+          momentI = Math.max(momentI, 500);
+
+          const torque = leverX * gravity * com.mass;
+          piece.angularVel += torque / momentI;
+          piece.angularVel *= 0.97; // ground friction
+
+          // Pin the contact corner to the ground while rotating
+          const pinX = cpWX;
+          piece.rotation += piece.angularVel;
+          const nc = Math.cos(piece.rotation), ns = Math.sin(piece.rotation);
+          piece.x = pinX - (contactCorner.lx * nc - contactCorner.ly * ns);
+          piece.y = groundY - (contactCorner.lx * ns + contactCorner.ly * nc);
+
+          piece.vx *= 0.92;
+        }
+      }
+    }
+
+    function animate() {
+      updateFallingPieces();
+      updateParticles();
+      updateMouseTrail();
+      updateLeafWind();
+      updateDetachedLeaves();
+
+      if (isGrowing) {
+        growProgress += 0.003;
+        if (growProgress >= 1) { growProgress = 1; isGrowing = false; buildTreeStructure(); generateLeaves(); leavesGrowing = true; leafGrowStart = performance.now(); }
+      }
+
+      draw();
+      if (isGrowing && growthComplete) { isGrowing = false; buildTreeStructure(); generateLeaves(); leavesGrowing = true; leafGrowStart = performance.now(); }
+      requestAnimationFrame(animate);
+    }
+
+    function lineIntersects(x1, y1, x2, y2, x3, y3, x4, y4) {
+      const d = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+      if (Math.abs(d) < 0.0001) return null;
+      const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / d;
+      const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / d;
+      if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return { x: x1 + t * (x2 - x1), y: y1 + t * (y2 - y1), t: u };
+      return null;
+    }
+
+    function findIntersectingBranch(sx1, sy1, sx2, sy2) {
+      let best = null, bestDist = Infinity;
+      for (const seg of branchSegments) {
+        if (cutBranches.has(seg.index)) continue;
+        if (seg.isCut) continue;
+        const hit = lineIntersects(sx1, sy1, sx2, sy2, seg.x1, seg.y1, seg.x2, seg.y2);
+        if (hit) {
+          // Prevent cutting the trunk too close to its base — a small nick
+          // near the ground shouldn't fell the entire tree
+          if (seg.depth <= 1) {
+            const segLen = Math.sqrt((seg.x2 - seg.x1) ** 2 + (seg.y2 - seg.y1) ** 2);
+            if (hit.t * segLen < seg.thickness) continue;
+          }
+          const dist = (hit.x - sx1) ** 2 + (hit.y - sy1) ** 2;
+          if (dist < bestDist) { bestDist = dist; best = { seg, hitX: hit.x, hitY: hit.y, t: hit.t }; }
+        }
+      }
+      return best;
+    }
+
+    function findIntersectingFallingPiece(sx1, sy1, sx2, sy2) {
+      for (let pi = 0; pi < fallingPieces.length; pi++) {
+        const piece = fallingPieces[pi];
+        const cos = Math.cos(piece.rotation), sin = Math.sin(piece.rotation);
+
+        // Transform slash to piece's local coords
+        const lsx1 = (sx1 - piece.x) * cos + (sy1 - piece.y) * sin;
+        const lsy1 = -(sx1 - piece.x) * sin + (sy1 - piece.y) * cos;
+        const lsx2 = (sx2 - piece.x) * cos + (sy2 - piece.y) * sin;
+        const lsy2 = -(sx2 - piece.x) * sin + (sy2 - piece.y) * cos;
+
+        for (let si = 0; si < piece.segments.length; si++) {
+          const seg = piece.segments[si];
+          if (seg.fallen) continue;
+          const hit = lineIntersects(lsx1, lsy1, lsx2, lsy2, seg.lx1, seg.ly1, seg.lx2, seg.ly2);
+          if (hit) return { piece, pieceIndex: pi, seg, segIndex: si, hitX: hit.x, hitY: hit.y, t: hit.t };
+        }
+      }
+      return null;
+    }
+
+    function cutBranch(seg, hitX, hitY, t, slashDir) {
+      // Use CURRENT endThickness (not original) so re-cuts interpolate correctly
+      const cutThickness = seg.thickness + (seg.endThickness - seg.thickness) * t;
+
+      const fallingIndices = [];
+      for (const ci of seg.children) fallingIndices.push(...getDescendants(ci));
+      for (const idx of fallingIndices) cutBranches.add(idx);
+
+      // Save current endpoint before truncating — this is where the visible
+      // segment actually ends (may differ from origX2/origY2 after a prior cut)
+      const prevX2 = seg.x2, prevY2 = seg.y2;
+      const prevEndThickness = seg.endThickness;
+
+      seg.x2 = hitX; seg.y2 = hitY;
+      seg.endThickness = cutThickness; seg.isCut = true;
+      const oldChildren = seg.children;
+      seg.children = [];
+
+      const segments = [];
+
+      // Remainder of cut segment — from cut point to CURRENT end, not original
+      const remainderLen = Math.sqrt((prevX2 - hitX) ** 2 + (prevY2 - hitY) ** 2);
+      if (remainderLen > 2) {
+        segments.push({
+          lx1: 0, ly1: 0,
+          lx2: prevX2 - hitX, ly2: prevY2 - hitY,
+          thick1: cutThickness, thick2: prevEndThickness,
+          depth: seg.depth, hasChildren: oldChildren.length > 0
+        });
+      }
+
+      // Children
+      for (const idx of fallingIndices) {
+        const s = branchSegments[idx];
+        segments.push({
+          lx1: s.x1 - hitX, ly1: s.y1 - hitY,
+          lx2: s.x2 - hitX, ly2: s.y2 - hitY,
+          thick1: s.thickness, thick2: s.endThickness,
+          depth: s.depth, hasChildren: s.children.length > 0
+        });
+      }
+
+      // Collect leaves attached to falling segments
+      const allFallingIndices = new Set(fallingIndices);
+      allFallingIndices.add(seg.index); // include the cut segment itself (leaves beyond cut point)
+      const pieceLeaves = [];
+      for (let li = leaves.length - 1; li >= 0; li--) {
+        const leaf = leaves[li];
+        if (leaf.segIndex === seg.index) {
+          // Only take leaves that are beyond the cut point
+          if (leaf.t > t) {
+            pieceLeaves.push({ lx: leaf.x - hitX, ly: leaf.y - hitY, bx: leaf.bx - hitX, by: leaf.by - hitY, size: leaf.size, angle: leaf.angle, color: leaf.color });
+            leaves.splice(li, 1);
+          }
+        } else if (allFallingIndices.has(leaf.segIndex)) {
+          pieceLeaves.push({ lx: leaf.x - hitX, ly: leaf.y - hitY, bx: leaf.bx - hitX, by: leaf.by - hitY, size: leaf.size, angle: leaf.angle, color: leaf.color });
+          leaves.splice(li, 1);
+        }
+      }
+
+      if (segments.length > 0) {
+        fallingPieces.push({
+          x: hitX, y: hitY,
+          vx: slashDir * (1.5 + Math.random() * 1.5),
+          vy: -1 - Math.random() * 2,
+          rotation: 0, angularVel: slashDir * (0.015 + Math.random() * 0.03),
+          segments, thickness: cutThickness, landed: false, groundTime: 0, alpha: 1,
+          leaves: pieceLeaves
+        });
+      }
+
+      spawnSawdust(hitX, hitY);
+    }
+
+    function cutFallingPiece(result, slashDir) {
+      const { piece, pieceIndex, seg, segIndex, hitX, hitY, t } = result;
+
+      // Convert hit back to world coords
+      const cos = Math.cos(piece.rotation), sin = Math.sin(piece.rotation);
+      const worldHitX = piece.x + hitX * cos - hitY * sin;
+      const worldHitY = piece.y + hitX * sin + hitY * cos;
+
+      // Find segments to split off (this segment's remainder + children)
+      const newSegments = [];
+      const cutThickness = seg.thick1 + (seg.thick2 - seg.thick1) * t;
+
+      // Remainder of cut segment
+      const remLx = seg.lx2 - hitX, remLy = seg.ly2 - hitY;
+      if (Math.sqrt(remLx * remLx + remLy * remLy) > 2) {
+        newSegments.push({
+          lx1: 0, ly1: 0, lx2: remLx, ly2: remLy,
+          thick1: cutThickness, thick2: seg.thick2,
+          depth: seg.depth, hasChildren: seg.hasChildren
+        });
+      }
+
+      // Find children segments (those that start near this segment's end)
+      const segEndX = seg.lx2, segEndY = seg.ly2;
+      for (let i = 0; i < piece.segments.length; i++) {
+        if (i === segIndex) continue;
+        const s = piece.segments[i];
+        if (s.fallen) continue;
+        const dist = Math.sqrt((s.lx1 - segEndX) ** 2 + (s.ly1 - segEndY) ** 2);
+        if (dist < 5) {
+          s.fallen = true;
+          newSegments.push({
+            lx1: s.lx1 - hitX, ly1: s.ly1 - hitY,
+            lx2: s.lx2 - hitX, ly2: s.ly2 - hitY,
+            thick1: s.thick1, thick2: s.thick2,
+            depth: s.depth, hasChildren: s.hasChildren
+          });
+        }
+      }
+
+      // Truncate original segment
+      seg.lx2 = hitX; seg.ly2 = hitY;
+      seg.thick2 = cutThickness; seg.hasChildren = false;
+
+      // Transfer leaves beyond the cut point to the new piece
+      const newPieceLeaves = [];
+      if (piece.leaves) {
+        for (let li = piece.leaves.length - 1; li >= 0; li--) {
+          const lf = piece.leaves[li];
+          // Simple heuristic: leaves "beyond" the cut point (using dot product along cut direction)
+          const dx = lf.lx - hitX, dy = lf.ly - hitY;
+          const segDx = seg.lx2 - seg.lx1, segDy = seg.ly2 - seg.ly1;
+          // If the leaf is closer to the falling side, move it
+          if (dx * segDx + dy * segDy > 0 || Math.sqrt(dx * dx + dy * dy) > Math.sqrt(segDx * segDx + segDy * segDy) * 0.5) {
+            newPieceLeaves.push({ lx: lf.lx - hitX, ly: lf.ly - hitY, bx: (lf.bx || lf.lx) - hitX, by: (lf.by || lf.ly) - hitY, size: lf.size, angle: lf.angle, color: lf.color });
+            piece.leaves.splice(li, 1);
+          }
+        }
+      }
+
+      if (newSegments.length > 0) {
+        fallingPieces.push({
+          x: worldHitX, y: worldHitY,
+          vx: piece.vx + slashDir * 2, vy: piece.vy - 2,
+          rotation: piece.rotation,
+          angularVel: piece.angularVel + slashDir * 0.05,
+          segments: newSegments, thickness: cutThickness,
+          landed: false, groundTime: 0, alpha: 1,
+          leaves: newPieceLeaves
+        });
+      }
+
+      spawnSawdust(worldHitX, worldHitY);
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
+      if (isGrowing) return;
+      isSlashing = true;
+      mouseTrail = [{ x: mouseX, y: mouseY, life: 1 }];
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left, y = e.clientY - rect.top;
+
+      if (isSlashing) {
+        const dist = Math.sqrt((x - mouseX) ** 2 + (y - mouseY) ** 2);
+        if (dist > 2) {
+          mouseTrail.push({ x, y, life: 1 });
+          if (mouseTrail.length > 20) mouseTrail.shift();
+
+          if (!isGrowing) {
+            // Try cutting standing tree
+            const hit = findIntersectingBranch(mouseX, mouseY, x, y);
+            if (hit) {
+              cutBranch(hit.seg, hit.hitX, hit.hitY, hit.t, x > mouseX ? 1 : -1);
+            } else {
+              // Try cutting falling pieces
+              const fallHit = findIntersectingFallingPiece(mouseX, mouseY, x, y);
+              if (fallHit) cutFallingPiece(fallHit, x > mouseX ? 1 : -1);
+            }
+          }
+        }
+      }
+      mouseX = x; mouseY = y;
+    });
+
+    canvas.addEventListener('mouseup', () => { isSlashing = false; mouseTrail = []; });
+    canvas.addEventListener('mouseleave', () => { isSlashing = false; mouseTrail = []; });
+    canvas.addEventListener('dblclick', () => newTree());
+
+    window.addEventListener('resize', resize);
+    resize();
+    animate();
+  </script>
+</body>
+</html>
