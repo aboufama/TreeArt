@@ -17,6 +17,7 @@ export class FallingPiece {
     this.leaves = data.leaves || [];
     this.treeRings = data.treeRings || [];
 
+    this.ridingLeaves = data.leaves || [];
     this.landed = false;
     this.settled = false;
     this.groundTime = 0;
@@ -24,6 +25,7 @@ export class FallingPiece {
     this.pivoting = false;
     this.impactDone = false;
     this.groundShake = false;
+    this.leavesShed = false;
 
     // Create mesh for this piece
     this.mesh = this.createMesh(branchMaterial);
@@ -163,6 +165,60 @@ export class FallingPiece {
     }
 
     return { x: cmx, y: cmy, mass: totalMass || 1 };
+  }
+
+  // Returns riding leaves in world coordinates for rendering
+  getWorldLeaves() {
+    if (this.ridingLeaves.length === 0) return [];
+
+    const cos = Math.cos(this.rotation);
+    const sin = Math.sin(this.rotation);
+    const result = [];
+
+    for (const leaf of this.ridingLeaves) {
+      result.push({
+        x: this.x + leaf.lx * cos - leaf.ly * sin,
+        y: this.y + leaf.lx * sin + leaf.ly * cos,
+        size: leaf.size,
+        angle: leaf.angle + this.rotation,
+        color: leaf.color,
+        life: this.alpha
+      });
+    }
+
+    return result;
+  }
+
+  // Shed 30% of riding leaves on ground impact, returns shed leaves for detached physics
+  shedLeavesOnImpact() {
+    if (this.leavesShed || this.ridingLeaves.length === 0) return [];
+
+    this.leavesShed = true;
+    const shed = [];
+    const cos = Math.cos(this.rotation);
+    const sin = Math.sin(this.rotation);
+
+    for (let i = this.ridingLeaves.length - 1; i >= 0; i--) {
+      if (Math.random() < 0.3) {
+        const leaf = this.ridingLeaves[i];
+        shed.push({
+          x: this.x + leaf.lx * cos - leaf.ly * sin,
+          y: this.y + leaf.lx * sin + leaf.ly * cos,
+          vx: (Math.random() - 0.5) * 2,
+          vy: 0.5 + Math.random() * 1,
+          size: leaf.size,
+          angle: leaf.angle + this.rotation,
+          angularVel: (Math.random() - 0.5) * 0.08,
+          color: leaf.color,
+          life: 1,
+          flutter: Math.random() * Math.PI * 2,
+          flutterSpeed: 0.03 + Math.random() * 0.03
+        });
+        this.ridingLeaves.splice(i, 1);
+      }
+    }
+
+    return shed;
   }
 
   update(groundY, onShake, onSpawnPiece) {

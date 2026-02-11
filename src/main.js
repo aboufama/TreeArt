@@ -269,7 +269,8 @@ class TreeApp {
     const groundY = this.sceneManager.trunkBottomY;
     this.cutExecutor.update(
       groundY,
-      (amount) => this.sceneManager.shake(amount)
+      (amount) => this.sceneManager.shake(amount),
+      (shedLeaves) => this.leafPhysics.detachedLeaves.push(...shedLeaves)
     );
 
     // Add newly spawned pieces to scene
@@ -291,8 +292,12 @@ class TreeApp {
     );
     this.leafInstancer.update(time);
 
-    // Update detached leaves
-    this.detachedLeafRenderer.update(this.leafPhysics.detachedLeaves, time);
+    // Collect all visible detached + riding leaves for rendering
+    const allDetached = this.leafPhysics.detachedLeaves.slice();
+    for (const piece of this.cutExecutor.fallingPieces) {
+      allDetached.push(...piece.getWorldLeaves());
+    }
+    this.detachedLeafRenderer.update(allDetached, time);
 
     // Update effects
     this.sawdustSystem.update(this.sceneManager.height);

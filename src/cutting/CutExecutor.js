@@ -83,17 +83,31 @@ export class CutExecutor {
       });
     }
 
-    // Detach leaves on cut segments (they flutter down instead of vanishing)
+    // Split leaves: 40% detach and flutter, 60% ride the falling piece
     const allFallingIndices = new Set(fallingIndices);
     allFallingIndices.add(seg.index);
+    const ridingLeaves = [];
 
     for (const leaf of leaves) {
       if (leaf.size <= 0) continue;
 
-      if (leaf.segIndex === seg.index && leaf.t > t) {
+      const affected = (leaf.segIndex === seg.index && leaf.t > t) ||
+                       allFallingIndices.has(leaf.segIndex);
+      if (!affected) continue;
+
+      if (Math.random() < 0.4) {
+        // 40% detach and flutter away
         if (onDetachLeaf) onDetachLeaf(leaf, slashDir);
-      } else if (allFallingIndices.has(leaf.segIndex)) {
-        if (onDetachLeaf) onDetachLeaf(leaf, slashDir);
+      } else {
+        // 60% ride the falling piece
+        ridingLeaves.push({
+          lx: leaf.x - hitX,
+          ly: leaf.y - hitY,
+          size: leaf.size,
+          angle: leaf.angle,
+          color: leaf.color
+        });
+        leaf.size = 0; // hide from instancer
       }
     }
 
@@ -116,6 +130,7 @@ export class CutExecutor {
         angularVel: slashDir * (0.015 + Math.random() * 0.03),
         segments: pieceSegments,
         thickness: cutThickness,
+        leaves: ridingLeaves,
         treeRings: [treeRing]
       }, this.branchMaterial);
 
@@ -216,14 +231,23 @@ export class CutExecutor {
     return true;
   }
 
-  update(groundY, onShake) {
+  update(groundY, onShake, onShedLeaves) {
     const spawnQueue = [];
 
     for (let i = this.fallingPieces.length - 1; i >= 0; i--) {
       const piece = this.fallingPieces[i];
+      const wasAirborne = !piece.settled && !piece.pivoting;
       const alive = piece.update(groundY, onShake, (data) => {
         spawnQueue.push(data);
       });
+
+      // Shed leaves on first ground contact
+      if (wasAirborne && (piece.pivoting || piece.settled) && !piece.leavesShed) {
+        const shed = piece.shedLeavesOnImpact();
+        if (shed.length > 0 && onShedLeaves) {
+          onShedLeaves(shed);
+        }
+      }
 
       if (!alive) {
         piece.mesh.parent?.remove(piece.mesh);
@@ -236,7 +260,6 @@ export class CutExecutor {
     for (const data of spawnQueue) {
       const piece = new FallingPiece(data, this.branchMaterial);
       this.fallingPieces.push(piece);
-      // Add to scene via callback or reference
     }
 
     return spawnQueue;
