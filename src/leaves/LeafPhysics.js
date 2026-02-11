@@ -55,11 +55,24 @@ export class LeafPhysics {
   }
 
   detachLeaf(leaf) {
+    this._createDetached(leaf,
+      leaf.vx * 0.5 + (Math.random() - 0.5) * 1.5,
+      leaf.vy * 0.3 + 0.5
+    );
+  }
+
+  detachLeafFromCut(leaf, slashDir) {
+    this._createDetached(leaf,
+      slashDir * (1 + Math.random() * 2) + (Math.random() - 0.5),
+      1 + Math.random() * 1.5
+    );
+  }
+
+  _createDetached(leaf, vx, vy) {
     this.detachedLeaves.push({
       x: leaf.x + leaf.ox,
       y: leaf.y + leaf.oy,
-      vx: leaf.vx * 0.5 + (Math.random() - 0.5) * 1.5,
-      vy: leaf.vy * 0.3 + 0.5,
+      vx, vy,
       size: leaf.size,
       angle: leaf.angle,
       angularVel: (Math.random() - 0.5) * 0.08,

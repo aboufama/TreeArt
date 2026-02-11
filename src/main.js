@@ -177,8 +177,8 @@ class TreeApp {
     // Update cut detector
     this.cutDetector.setSegments(this.segments);
 
-    // Build initial geometry
-    const geometry = this.branchGeometry.build(this.segments);
+    // Create branch mesh (starts empty, growth animation fills it)
+    const geometry = this.branchGeometry.build(this.segments, new Set(), () => 0);
     this.branchMesh = new THREE.Mesh(geometry, this.branchMaterial);
     this.sceneManager.layers.branches.add(this.branchMesh);
 
@@ -207,7 +207,8 @@ class TreeApp {
         hit.t,
         slashDir,
         this.leaves,
-        this.sceneManager
+        this.sceneManager,
+        (leaf, dir) => this.leafPhysics.detachLeafFromCut(leaf, dir)
       );
 
       // Spawn sawdust
@@ -246,8 +247,23 @@ class TreeApp {
   }
 
   update(time) {
-    // Update leaf pop-in animation
+    // Update growth animation
+    const wasGrowingBranches = this.growthAnimator.isGrowingBranches();
     this.growthAnimator.update();
+
+    // Rebuild branch geometry during growth
+    if (this.growthAnimator.isGrowingBranches()) {
+      // Still growing — partial rebuild with interpolated segments
+      const getGrowth = (depth) => this.growthAnimator.getSegmentGrowth(depth);
+      this.branchGeometry.build(
+        this.segments,
+        this.cutExecutor.cutBranches,
+        getGrowth
+      );
+    } else if (wasGrowingBranches) {
+      // Just finished growing — final full rebuild
+      this.branchGeometry.build(this.segments, this.cutExecutor.cutBranches);
+    }
 
     // Update falling pieces
     const groundY = this.sceneManager.trunkBottomY;

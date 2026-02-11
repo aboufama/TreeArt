@@ -13,7 +13,7 @@ export class BranchGeometry {
     this.indices = [];
   }
 
-  build(segments, cutBranches = new Set(), growthProgress = 1) {
+  build(segments, cutBranches = new Set(), getSegmentGrowth = null) {
     this.positions = [];
     this.uvs = [];
     this.depthRatios = [];
@@ -25,8 +25,15 @@ export class BranchGeometry {
     for (const seg of segments) {
       if (cutBranches.has(seg.index)) continue;
 
-      // Get segment vertices
-      const verts = this.getSegmentVertices(seg, growthProgress);
+      // Get growth fraction for this segment (0 = hidden, 0-1 = partial, 1 = full)
+      let growth = 1;
+      if (getSegmentGrowth) {
+        growth = getSegmentGrowth(seg.depth);
+        if (growth <= 0) continue;
+      }
+
+      // Get segment vertices (with partial growth interpolation)
+      const verts = this.getSegmentVertices(seg, growth);
       if (!verts) continue;
 
       const { p1, p2, p3, p4, color, depthRatio } = verts;
@@ -59,12 +66,6 @@ export class BranchGeometry {
         vertexIndex, vertexIndex + 2, vertexIndex + 3
       );
       vertexIndex += 4;
-
-      // Add end cap circle if branch has children or is cut
-      if (!seg.isCut && seg.children.length > 0) {
-        const capVerts = this.addEndCap(seg.x2, seg.y2, seg.endThickness / 2, color, depthRatio);
-        vertexIndex += capVerts;
-      }
     }
 
     // Update geometry
@@ -83,9 +84,14 @@ export class BranchGeometry {
     return this.geometry;
   }
 
-  getSegmentVertices(seg, growthProgress = 1) {
+  getSegmentVertices(seg, growth = 1) {
     const depthRatio = seg.depth / MAX_DEPTH;
     const color = getBranchColor(seg.depth, MAX_DEPTH);
+
+    // Interpolate end point for partial growth
+    const x2 = seg.x1 + (seg.x2 - seg.x1) * growth;
+    const y2 = seg.y1 + (seg.y2 - seg.y1) * growth;
+    const endThick = seg.thickness + (seg.endThickness - seg.thickness) * growth;
 
     // Calculate perpendicular for thickness
     const angle = Math.atan2(seg.y2 - seg.y1, seg.x2 - seg.x1);
@@ -93,49 +99,15 @@ export class BranchGeometry {
     const perpY = Math.sin(angle + Math.PI / 2);
 
     const t1 = seg.thickness / 2;
-    const t2 = seg.endThickness / 2;
+    const t2 = endThick / 2;
 
     // Four corners of tapered quad
     const p1 = { x: seg.x1 + perpX * t1, y: seg.y1 + perpY * t1 };
-    const p2 = { x: seg.x2 + perpX * t2, y: seg.y2 + perpY * t2 };
-    const p3 = { x: seg.x2 - perpX * t2, y: seg.y2 - perpY * t2 };
+    const p2 = { x: x2 + perpX * t2, y: y2 + perpY * t2 };
+    const p3 = { x: x2 - perpX * t2, y: y2 - perpY * t2 };
     const p4 = { x: seg.x1 - perpX * t1, y: seg.y1 - perpY * t1 };
 
     return { p1, p2, p3, p4, color, depthRatio };
-  }
-
-  addEndCap(cx, cy, radius, color, depthRatio) {
-    const segments = 12;
-    const startVertex = this.positions.length / 3;
-
-    // Center vertex
-    this.positions.push(cx, cy, 0);
-    this.uvs.push(0.5, 0.5);
-    this.depthRatios.push(depthRatio);
-    this.colors.push(color.r, color.g, color.b);
-
-    // Circle vertices
-    for (let i = 0; i <= segments; i++) {
-      const theta = (i / segments) * Math.PI * 2;
-      const x = cx + Math.cos(theta) * radius;
-      const y = cy + Math.sin(theta) * radius;
-
-      this.positions.push(x, y, 0);
-      this.uvs.push(0.5 + Math.cos(theta) * 0.5, 0.5 + Math.sin(theta) * 0.5);
-      this.depthRatios.push(depthRatio);
-      this.colors.push(color.r, color.g, color.b);
-    }
-
-    // Triangle fan indices
-    for (let i = 0; i < segments; i++) {
-      this.indices.push(
-        startVertex,
-        startVertex + 1 + i,
-        startVertex + 1 + i + 1
-      );
-    }
-
-    return segments + 2; // center + circle vertices
   }
 
   dispose() {

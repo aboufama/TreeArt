@@ -70,6 +70,13 @@ export class LeafInstancer {
   }
 
   updateInstances(cutBranches = new Set(), leafGrowStart = 0) {
+    // No leaves until leaf growth phase starts
+    if (leafGrowStart === 0) {
+      this.mesh.count = 0;
+      this.mesh.instanceMatrix.needsUpdate = true;
+      return;
+    }
+
     const now = performance.now();
     const elapsed = (now - leafGrowStart) / 1000;
     const growDuration = 1.5;

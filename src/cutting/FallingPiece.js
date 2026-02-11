@@ -81,37 +81,6 @@ export class FallingPiece {
         vertexIndex, vertexIndex + 2, vertexIndex + 3
       );
       vertexIndex += 4;
-
-      // Add end cap if has children
-      if (seg.hasChildren) {
-        const cx = seg.lx2;
-        const cy = seg.ly2;
-        const radius = seg.thick2 / 2;
-        const capSegments = 12;
-        const startVert = positions.length / 3;
-
-        positions.push(cx, cy, 0);
-        uvs.push(0.5, 0.5);
-        depthRatios.push(depthRatio);
-        colors.push(color.r, color.g, color.b);
-
-        for (let i = 0; i <= capSegments; i++) {
-          const theta = (i / capSegments) * Math.PI * 2;
-          positions.push(
-            cx + Math.cos(theta) * radius,
-            cy + Math.sin(theta) * radius,
-            0
-          );
-          uvs.push(0.5 + Math.cos(theta) * 0.5, 0.5 + Math.sin(theta) * 0.5);
-          depthRatios.push(depthRatio);
-          colors.push(color.r, color.g, color.b);
-        }
-
-        for (let i = 0; i < capSegments; i++) {
-          indices.push(startVert, startVert + 1 + i, startVert + 2 + i);
-        }
-        vertexIndex = positions.length / 3;
-      }
     }
 
     const geometry = new THREE.BufferGeometry();

@@ -25,7 +25,7 @@ export class CutExecutor {
     return result;
   }
 
-  cutBranch(segments, seg, hitX, hitY, t, slashDir, leaves, sceneManager) {
+  cutBranch(segments, seg, hitX, hitY, t, slashDir, leaves, sceneManager, onDetachLeaf) {
     // Calculate cut thickness
     const cutThickness = seg.thickness + (seg.endThickness - seg.thickness) * t;
 
@@ -83,39 +83,17 @@ export class CutExecutor {
       });
     }
 
-    // Collect leaves attached to falling segments
+    // Detach leaves on cut segments (they flutter down instead of vanishing)
     const allFallingIndices = new Set(fallingIndices);
     allFallingIndices.add(seg.index);
-    const pieceLeaves = [];
 
-    for (let li = leaves.length - 1; li >= 0; li--) {
-      const leaf = leaves[li];
+    for (const leaf of leaves) {
+      if (leaf.size <= 0) continue;
 
-      if (leaf.segIndex === seg.index) {
-        // Only take leaves beyond cut point
-        if (leaf.t > t) {
-          pieceLeaves.push({
-            lx: leaf.x - hitX,
-            ly: leaf.y - hitY,
-            bx: leaf.bx - hitX,
-            by: leaf.by - hitY,
-            size: leaf.size,
-            angle: leaf.angle,
-            color: leaf.color
-          });
-          leaves.splice(li, 1);
-        }
+      if (leaf.segIndex === seg.index && leaf.t > t) {
+        if (onDetachLeaf) onDetachLeaf(leaf, slashDir);
       } else if (allFallingIndices.has(leaf.segIndex)) {
-        pieceLeaves.push({
-          lx: leaf.x - hitX,
-          ly: leaf.y - hitY,
-          bx: leaf.bx - hitX,
-          by: leaf.by - hitY,
-          size: leaf.size,
-          angle: leaf.angle,
-          color: leaf.color
-        });
-        leaves.splice(li, 1);
+        if (onDetachLeaf) onDetachLeaf(leaf, slashDir);
       }
     }
 
@@ -138,7 +116,6 @@ export class CutExecutor {
         angularVel: slashDir * (0.015 + Math.random() * 0.03),
         segments: pieceSegments,
         thickness: cutThickness,
-        leaves: pieceLeaves,
         treeRings: [treeRing]
       }, this.branchMaterial);
 
