@@ -124,10 +124,6 @@ class TreeApp {
       this.mouseTrail.endSlash();
     });
 
-    canvas.addEventListener('dblclick', () => {
-      this.newTree();
-    });
-
     // -- Touch events (mobile) --
     canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
@@ -167,15 +163,6 @@ class TreeApp {
       this.mouseTrail.endSlash();
     });
 
-    // Double-tap to regenerate tree
-    this.lastTap = 0;
-    canvas.addEventListener('touchstart', (e) => {
-      const now = Date.now();
-      if (now - this.lastTap < 350) {
-        this.newTree();
-      }
-      this.lastTap = now;
-    });
 
     window.addEventListener('resize', () => {
       this.postProcessing.resize(
